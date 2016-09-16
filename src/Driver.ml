@@ -14,10 +14,10 @@ let p =
       ),
       Seq (
           Seq (
-              Assign ("x1", Mul (Var "x", Var "x")),
-              Assign ("y1", Mul (Var "y", Var "y"))
+              Assign ("x1", Op (Mul, Var "x", Var "x")),
+              Assign ("y1", Op (Mul, Var "y", Var "y"))
           ),
-          Write (Add (Var "y1", Var "x1"))
+          Write (Op (Add, Var "y1", Var "x1"))
       )
     )
 
@@ -88,7 +88,7 @@ let _ =
     | X86Call s       -> Printf.printf "\tCALL\t%s\n" s
     | X86Ret          -> Printf.printf "\tRET\n"
   ) code;
-  Printf.printf "\tXORL\t%s,\t%s\nRET\n\n" (pr_op x86eax) (pr_op x86eax);
+  Printf.printf "\tXORL\t%s,\t%s\n\tRET\n\n" (pr_op x86eax) (pr_op x86eax);
   SS.iter (fun var ->
     Printf.printf "\t.comm %s 4\n" var
   ) vars
