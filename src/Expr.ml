@@ -130,6 +130,7 @@ let rec compile_stmt stmt =
   | Seq    (l, r) -> compile_stmt l @ compile_stmt r
 
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
+let x86regs8 = [|"spl"; "%bpl"; "%al"; "%dl"; "%bl"; "%cl"; "%sil"; "%dil"|]
 let num_of_regs = Array.length x86regs
 let word_size = 4
 
@@ -242,7 +243,7 @@ let x86compile : instr list -> x86instr list = fun code ->
         )
         | Lt | Le | Gt | Ge | Eq | Neq -> (
           let y::x::stack' = stack in
-          let perform t = [X86Xor (re_buf, re_buf); X86Cmp (y, t); x86compile_op1 op re_buf; X86Mov (re_buf, t)] in
+          let perform t = [X86Mov (L 0, re_buf); X86Cmp (y, t); x86compile_op1 op re_buf; X86Mov (re_buf, t)] in
           match x with
           | R _ -> (x::stack', perform x @ x86subStack y)
           | _   -> (x::stack', [X86Mov (x, op_buf)] @ perform op_buf @ [X86Mov (op_buf, x)] @ x86subStack y)
