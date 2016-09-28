@@ -1,0 +1,15 @@
+read(x);
+read(y);
+write(x + y);
+write(x - y);
+write(x * y);
+write(x / y);
+write(x % y);
+write(100500);
+write(x < y);
+write(x > y);
+write(x <= y);
+write(x >= y);
+write(x == y);
+write(x != y);
+write(100500)
