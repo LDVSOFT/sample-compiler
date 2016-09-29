@@ -1,5 +1,12 @@
 module SS = Set.Make(String)
 
+let find: 'a array -> 'a -> int  = fun a x ->
+  let rec find' a x n =
+    if a.(n) = x
+      then n
+      else find' a x (n + 1)
+  in find' a x 0
+
 let eval_op op l r =
   let toi x = if x then 1 else 0 in
   match op with
@@ -35,16 +42,20 @@ type stmt =
   | Write  of expr
   | Assign of string * expr
   | Seq    of stmt * stmt
+  | If     of expr * stmt
+  | While  of expr * stmt
 
 let run input stmt =
   let rec run' ((state, input, output) as c) stmt =
     let state' x = List.assoc x state in
     match stmt with
-    | Skip          -> c
-    | Seq    (l, r) -> run' (run' c l) r
-    | Assign (x, e) -> ((x, eval state' e) :: state, input, output)
-    | Write   e     -> (state, input, output @ [eval state' e])
-    | Read    x     ->
+    | Skip                -> c
+    | Seq    (l, r)       -> run' (run' c l) r
+    | Assign (x, e)       -> ((x, eval state' e) :: state, input, output)
+    | If     (cond, code) -> if eval state' cond != 0 then run' c code else c
+    | While  (cond, code) -> if eval state' cond != 0 then run' c (Seq (code, stmt)) else c
+    | Write  e            -> (state, input, output @ [eval state' e])
+    | Read   x            ->
        let y::input' = input in
        ((x, y) :: state, input', output)
   in
@@ -60,46 +71,55 @@ let rec collect_vars stmt =
   in
   match stmt with
   | Skip -> SS.empty
+  | If (l, r) -> SS.union (collect_vars_expr l) (collect_vars r)
+  | While (l, r) -> SS.union (collect_vars_expr l) (collect_vars r)
   | Seq (l, r) -> SS.union (collect_vars l) (collect_vars r)
   | Assign (x, e) -> SS.union (SS.singleton x) (collect_vars_expr e)
   | Write e -> collect_vars_expr e
   | Read x -> SS.singleton x
 
 type instr =
+  | S_LABEL of string
   | S_READ
   | S_WRITE
   | S_PUSH  of int
   | S_LD    of string
   | S_ST    of string
   | S_OP    of string
+  | S_JMP   of string
+  | S_JIF   of string
 
-let srun input code =
-  let rec srun' (state, stack, input, output) code =
-    match code with
-    | []       -> output
-    | i::code' ->
-       srun'
-         (match i with
-          | S_READ ->
-             let y::input' = input in
-             (state, y::stack, input', output)
-          | S_WRITE ->
-             let y::stack' = stack in
-             (state, stack', input, output @ [y])
-          | S_PUSH n ->
-             (state, n::stack, input, output)
-          | S_LD x ->
-             (state, (List.assoc x state)::stack, input, output)
-          | S_ST x ->
-             let y::stack' = stack in
-             ((x, y)::state, stack', input, output)
-          | S_OP op ->
-             let y::x::stack' = stack in
-             (state, (eval_op op x y)::stack', input, output)
-         )
-         code'
+let srun: int list -> instr array -> int list = fun input code ->
+  let rec srun' ((state, stack, input, output, i) as c) =
+    if i == Array.length code then c
+    else srun' (match code.(i) with
+      | S_READ ->
+          let y::input' = input in
+          (state, y::stack, input', output, i + 1)
+      | S_WRITE ->
+          let y::stack' = stack in
+          (state, stack', input, output @ [y], i + 1)
+      | S_PUSH n ->
+          (state, n::stack, input, output, i + 1)
+      | S_LD x ->
+          (state, (List.assoc x state)::stack, input, output, i + 1)
+      | S_ST x ->
+          let y::stack' = stack in
+          ((x, y)::state, stack', input, output, i + 1)
+      | S_OP op ->
+          let y::x::stack' = stack in
+          (state, (eval_op op x y)::stack', input, output, i + 1)
+      | S_LABEL _ -> c
+      | S_JMP label ->
+          (state, stack, input, output, find code @@ S_LABEL label)
+      | S_JIF label ->
+          let y::stack' = stack in
+          if y == 0 then (state, stack', input, output, i + 1)
+          else (state, stack', input, output, find code @@ S_LABEL label)
+     )
   in
-  srun' ([], [], input, []) code
+  let (_, _, _, output, _) = srun' ([], [], input, [], 0)
+  in output
 
 let rec compile_expr expr =
   match expr with
@@ -107,13 +127,36 @@ let rec compile_expr expr =
   | Const  n     -> [S_PUSH n]
   | Op (op, l, r) -> compile_expr l @ compile_expr r @ [S_OP op]
 
-let rec compile_stmt stmt =
+let rec compile_stmt' stmt i =
   match stmt with
-  | Skip          -> []
-  | Assign (x, e) -> compile_expr e @ [S_ST x]
-  | Read    x     -> [S_READ; S_ST x]
-  | Write   e     -> compile_expr e @ [S_WRITE]
-  | Seq    (l, r) -> compile_stmt l @ compile_stmt r
+  | Skip          -> ([], i)
+  | Assign (x, e) -> (compile_expr e @ [S_ST x], i)
+  | Read    x     -> ([S_READ; S_ST x], i)
+  | Write   e     -> (compile_expr e @ [S_WRITE], i)
+  | Seq    (l, r) ->
+    let (res', i') = compile_stmt' l i in
+    let (res'', i'') = compile_stmt' r i' in
+    (res' @ res'', i'')
+  | If (cond, code) ->
+    let label_true = "if_" ^ string_of_int i ^ "_true" in
+    let label_end  = "if_" ^ string_of_int i ^ "_end" in
+    let (body, i') = compile_stmt' code (i + 1) in
+    (compile_expr cond @ [S_JIF label_true; S_JMP label_end; S_LABEL label_true] @ body @ [S_LABEL label_end], i')
+  | While (cond, code) ->
+    let label_begin = "while_" ^ string_of_int i ^ "_begin" in
+    let label_true  = "while_" ^ string_of_int i ^ "_true" in
+    let label_end   = "while_" ^ string_of_int i ^ "_end" in
+    let (body, i') = compile_stmt' code (i + 1) in
+    (
+      [S_LABEL label_begin] @
+      compile_expr cond @
+      [S_JIF label_true; S_JMP label_end; S_LABEL label_true] @
+      body @
+      [S_JMP label_begin; S_LABEL label_end],
+      i'
+    )
+let compile_stmt stmt =
+  let (res, _) = compile_stmt' stmt 0 in res
 
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
 let x86regs8 = [|"spl"; "%bpl"; "%al"; "%dl"; "%bl"; "%cl"; "%sil"; "%dil"|]
@@ -121,13 +164,6 @@ let num_of_regs = Array.length x86regs
 let word_size = 4
 
 type opnd = R of int | S of int | M of string | L of int
-
-let find a x =
-  let rec find' a x n =
-    if a.(n) = x
-      then n
-      else find' a x (n + 1)
-  in find' a x 0
 
 let x86esp = R (find x86regs "%esp")
 let x86ebp = R (find x86regs "%ebp")
@@ -162,6 +198,9 @@ type x86instr = (* src -> dest *)
   | X86Ret
   | X86Cdq
   | X86Call  of string
+  | X86Jmp   of string
+  | X86Jne   of string
+  | X86_Label of string
 
 let x86compile : instr list -> x86instr list = fun code ->
   let x86addStack s =
@@ -174,12 +213,21 @@ let x86compile : instr list -> x86instr list = fun code ->
     | S _ -> [X86Add (L word_size, x86esp)]
     | _   -> []
   in
+  let op_buf = x86eax in
+  let re_buf = x86edx in
   let rec x86compile' stack code =
     match code with
     | []       -> []
     | i::code' ->
     let (stack', x86code) =
       match i with
+      | S_LABEL label ->
+        (stack, [X86_Label label])
+      | S_JMP label ->
+        (stack, [X86Jmp label])
+      | S_JIF label ->
+        let x::stack' = stack in
+        (stack', [X86Mov (x, x86eax); X86Cmp (L 0, x86eax); X86Jne label])
       | S_READ   ->
         let s = allocate stack in
         (s::stack, [X86Call "read"; X86Mov (x86eax, s)] @ x86addStack s)
@@ -219,8 +267,6 @@ let x86compile : instr list -> x86instr list = fun code ->
           | "!=" -> X86Setne l
           | _ -> invalid_arg ""
         in
-        let op_buf = x86eax in
-        let re_buf = x86edx in
         let protect t t' f = match t with
         | R x -> f t
         | _ -> [X86Mov (t, t')] @ (f t') @ [X86Mov (t', t)]
@@ -290,6 +336,9 @@ let print_code code b =
     | X86Ret          -> Buffer.add_string b @@ Printf.sprintf "\tRET  \n"
     | X86Cdq          -> Buffer.add_string b @@ Printf.sprintf "\tCDQ  \n"
     | X86Call s       -> Buffer.add_string b @@ Printf.sprintf "\tCALL \t%s\n" s
+    | X86Jmp  s       -> Buffer.add_string b @@ Printf.sprintf "\tJMP  \t%s\n" s
+    | X86Jne s        -> Buffer.add_string b @@ Printf.sprintf "\tJNE  \t%s\n" s
+    | X86_Label s -> Buffer.add_string b @@ Printf.sprintf "%s:\n" s
   ) code;
   Buffer.add_string b @@ Printf.sprintf "\tXORL\t%s,\t%s\n\tRET\n\n" (pr_op x86eax) (pr_op x86eax)
 

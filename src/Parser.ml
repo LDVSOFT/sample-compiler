@@ -21,10 +21,12 @@ ostap (
   | stmt;
 
   stmt:
-    %"read" "(" name:IDENT ")" {Read name}
-  | %"write" "(" e:expr ")"    {Write e}
-  | %"skip"                    {Skip}
-  | x:IDENT ":=" e:expr        {Assign (x, e)}
+    %"read" "(" name:IDENT ")"                   { Read name }
+  | %"write" "(" e:expr ")"                      { Write e }
+  | %"skip"                                      { Skip }
+  | %"if" "(" cond:expr ")" "{" body:stmt "}"    { If (cond, body) }
+  | %"while" "(" cond:expr ")" "{" body:stmt "}" { While (cond, body) }
+  | x:IDENT ":=" e:expr                          { Assign (x, e) }
 )
 
 let parse infile =

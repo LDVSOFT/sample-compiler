@@ -12,4 +12,8 @@ write(x <= y);
 write(x >= y);
 write(x == y);
 write(x != y);
-write(100500)
+write(100500);
+
+if (x < 3) {
+  write(11111)
+}
