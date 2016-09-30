@@ -1,66 +1,9 @@
 module SS = Set.Make(String)
 
-let find: 'a array -> 'a -> int  = fun a x ->
-  let rec find' a x n =
-    if a.(n) = x
-      then n
-      else find' a x (n + 1)
-  in find' a x 0
-
-let eval_op op l r =
-  let toi x = if x then 1 else 0 in
-  match op with
-  | "+" -> l + r
-  | "-" -> l - r
-  | "*" -> l * r
-  | "/" -> l / r
-  | "%" -> l mod r
-  | "&&" -> toi ((l != 0) && (r != 0))
-  | "||" -> toi ((l != 0) || (r != 0))
-  | "<"  -> toi (l < r)
-  | ">"  -> toi (l > r)
-  | "<=" -> toi (l <= r)
-  | ">=" -> toi (l >= r)
-  | "==" -> toi (l == r)
-  | "!=" -> toi (l != r)
-  | _ -> invalid_arg "Unknown op"
-
-type expr =
-  | Const of int
-  | Var   of string
-  | Op    of string * expr * expr
-
-let rec eval state expr =
-  match expr with
-  | Const n      -> n
-  | Var   x      -> state x
-  | Op (binop, l, r) -> eval_op binop (eval state l) (eval state r)
-
-type stmt =
-  | Skip
-  | Read   of string
-  | Write  of expr
-  | Assign of string * expr
-  | Seq    of stmt * stmt
-  | If     of expr * stmt
-  | While  of expr * stmt
-
-let run input stmt =
-  let rec run' ((state, input, output) as c) stmt =
-    let state' x = List.assoc x state in
-    match stmt with
-    | Skip                -> c
-    | Seq    (l, r)       -> run' (run' c l) r
-    | Assign (x, e)       -> ((x, eval state' e) :: state, input, output)
-    | If     (cond, code) -> if eval state' cond != 0 then run' c code else c
-    | While  (cond, code) -> if eval state' cond != 0 then run' c (Seq (code, stmt)) else c
-    | Write  e            -> (state, input, output @ [eval state' e])
-    | Read   x            ->
-       let y::input' = input in
-       ((x, y) :: state, input', output)
-  in
-  let (_, _, result) = run' ([], input, []) stmt in
-  result
+open Language
+open Expr
+open Stmt
+open StackMachine
 
 let rec collect_vars stmt =
   let rec collect_vars_expr expr =
@@ -78,86 +21,6 @@ let rec collect_vars stmt =
   | Write e -> collect_vars_expr e
   | Read x -> SS.singleton x
 
-type instr =
-  | S_LABEL of string
-  | S_READ
-  | S_WRITE
-  | S_PUSH  of int
-  | S_LD    of string
-  | S_ST    of string
-  | S_OP    of string
-  | S_JMP   of string
-  | S_JIF   of string
-
-let srun: int list -> instr array -> int list = fun input code ->
-  let rec srun' ((state, stack, input, output, i) as c) =
-    if i == Array.length code then c
-    else srun' (match code.(i) with
-      | S_READ ->
-          let y::input' = input in
-          (state, y::stack, input', output, i + 1)
-      | S_WRITE ->
-          let y::stack' = stack in
-          (state, stack', input, output @ [y], i + 1)
-      | S_PUSH n ->
-          (state, n::stack, input, output, i + 1)
-      | S_LD x ->
-          (state, (List.assoc x state)::stack, input, output, i + 1)
-      | S_ST x ->
-          let y::stack' = stack in
-          ((x, y)::state, stack', input, output, i + 1)
-      | S_OP op ->
-          let y::x::stack' = stack in
-          (state, (eval_op op x y)::stack', input, output, i + 1)
-      | S_LABEL _ -> c
-      | S_JMP label ->
-          (state, stack, input, output, find code @@ S_LABEL label)
-      | S_JIF label ->
-          let y::stack' = stack in
-          if y == 0 then (state, stack', input, output, i + 1)
-          else (state, stack', input, output, find code @@ S_LABEL label)
-     )
-  in
-  let (_, _, _, output, _) = srun' ([], [], input, [], 0)
-  in output
-
-let rec compile_expr expr =
-  match expr with
-  | Var    x     -> [S_LD   x]
-  | Const  n     -> [S_PUSH n]
-  | Op (op, l, r) -> compile_expr l @ compile_expr r @ [S_OP op]
-
-let rec compile_stmt' stmt i =
-  match stmt with
-  | Skip          -> ([], i)
-  | Assign (x, e) -> (compile_expr e @ [S_ST x], i)
-  | Read    x     -> ([S_READ; S_ST x], i)
-  | Write   e     -> (compile_expr e @ [S_WRITE], i)
-  | Seq    (l, r) ->
-    let (res', i') = compile_stmt' l i in
-    let (res'', i'') = compile_stmt' r i' in
-    (res' @ res'', i'')
-  | If (cond, code) ->
-    let label_true = "if_" ^ string_of_int i ^ "_true" in
-    let label_end  = "if_" ^ string_of_int i ^ "_end" in
-    let (body, i') = compile_stmt' code (i + 1) in
-    (compile_expr cond @ [S_JIF label_true; S_JMP label_end; S_LABEL label_true] @ body @ [S_LABEL label_end], i')
-  | While (cond, code) ->
-    let label_begin = "while_" ^ string_of_int i ^ "_begin" in
-    let label_true  = "while_" ^ string_of_int i ^ "_true" in
-    let label_end   = "while_" ^ string_of_int i ^ "_end" in
-    let (body, i') = compile_stmt' code (i + 1) in
-    (
-      [S_LABEL label_begin] @
-      compile_expr cond @
-      [S_JIF label_true; S_JMP label_end; S_LABEL label_true] @
-      body @
-      [S_JMP label_begin; S_LABEL label_end],
-      i'
-    )
-let compile_stmt stmt =
-  let (res, _) = compile_stmt' stmt 0 in res
-
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
 let x86regs8 = [|"spl"; "%bpl"; "%al"; "%dl"; "%bl"; "%cl"; "%sil"; "%dil"|]
 let num_of_regs = Array.length x86regs
@@ -165,10 +28,10 @@ let word_size = 4
 
 type opnd = R of int | S of int | M of string | L of int
 
-let x86esp = R (find x86regs "%esp")
-let x86ebp = R (find x86regs "%ebp")
-let x86eax = R (find x86regs "%eax")
-let x86edx = R (find x86regs "%edx")
+let x86esp = R (Utils.find x86regs "%esp")
+let x86ebp = R (Utils.find x86regs "%ebp")
+let x86eax = R (Utils.find x86regs "%eax")
+let x86edx = R (Utils.find x86regs "%edx")
 
 let allocate stack =
   match stack with
@@ -202,7 +65,7 @@ type x86instr = (* src -> dest *)
   | X86Jne   of string
   | X86_Label of string
 
-let x86compile : instr list -> x86instr list = fun code ->
+let x86compile : i list -> x86instr list = fun code ->
   let x86addStack s =
     match s with
     | S _ -> [X86Sub (L word_size, x86esp)]
@@ -341,7 +204,8 @@ let print_code code b =
     | X86_Label s -> Buffer.add_string b @@ Printf.sprintf "%s:\n" s
   ) code
 
-let print_compiled: stmt -> string = fun stmt ->
+(*
+let print_compiled: Expr.t -> string = fun stmt ->
   let buffer = Buffer.create 1024 in
   let asm = x86compile (compile_stmt stmt) in
   let vars = collect_vars stmt in
@@ -357,4 +221,4 @@ let build: stmt -> string -> int = fun stmt file ->
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
   Sys.command (Printf.sprintf "gcc -o %s ../runtime/runtime.o %s.s" file file)
-
+*)

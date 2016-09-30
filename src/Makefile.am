@@ -2,7 +2,7 @@ PACKAGE := rc
 SUBDIRS = 
 
 # type in sources here
-SOURCES = Expr.ml Parser.ml Driver.ml
+SOURCES = Utils.ml Language.ml Interpreter.ml StackMachine.ml Expr.ml Driver.ml
 MLI = 
 
 include $(top_srcdir)/m4/Makefile.am.vars
