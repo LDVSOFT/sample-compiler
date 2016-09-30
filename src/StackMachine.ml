@@ -9,7 +9,7 @@ type i =
 | S_JMP   of string
 | S_JIF   of string
 
-module Interpreter = 
+module Interpreter =
   struct
     open Interpreter
     open Utils
@@ -49,7 +49,7 @@ module Interpreter =
       in output
   end
 
-module Compile = 
+module Compile =
   struct
     open Language.Expr
     open Language.Stmt
@@ -59,7 +59,7 @@ module Compile =
     | Const n       -> [S_PUSH n]
     | Op (op, l, r) -> expr l @ expr r @ [S_OP op]
 
-    let stmt s = 
+    let stmt s =
       let rec compile_stmt' s i =
         match s with
         | Skip               -> ([], i)

@@ -7,6 +7,7 @@ check: $(TESTS)
 $(TESTS): %: %.expr
 	cat $@.input | ../src/rc.byte    $< > $@.log && diff $@.log orig/$@.log
 	cat $@.input | ../src/rc.byte -s $< > $@.log && diff $@.log orig/$@.log
+	cat $@.input | ../src/rc.byte -o $< > $@.log && diff $@.log orig/$@.log
 
 clean:
 	rm -f test*.log *.s *~ $(TESTS)

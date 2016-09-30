@@ -26,26 +26,28 @@ let main = ()
       | _    -> `Int, Sys.argv.(1)
     in
     match parse filename with
-    | `Ok stmt -> 
+    | `Ok stmt ->
       let rec read acc =
         try
           let r = read_int () in
           Printf.printf "> ";
-          read (acc @ [r]) 
+          read (acc @ [r])
         with End_of_file -> acc
       in
-      let input = read [] in
       (match mode with
-       | `X86 -> failwith "native not supported"
+       | `X86 ->
+           X86.run (Filename.chop_suffix filename ".expr") stmt
        | `SM  ->
-         let output = 
-           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt) 
+         let input = read [] in
+         let output =
+           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
          in
          List.iter (fun i -> Printf.printf "%d\n" i) output
-       | `Int -> 
+       | `Int ->
+         let input = read [] in
          let output = Interpreter.Stmt.eval input stmt in
          List.iter (fun i -> Printf.printf "%d\n" i) output
       )
     | `Fail er -> Printf.eprintf "%s" er
-  with 
+  with
   | Invalid_argument _ -> Printf.printf "Usage: rc.byte <name.expr>"

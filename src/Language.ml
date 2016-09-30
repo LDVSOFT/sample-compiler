@@ -19,7 +19,7 @@ module Expr =
         l:DECIMAL        {Const l}
       | v:IDENT          {Var v}
       | -"(" e:parse -")"
-    ) 
+    )
   end
 
 module Stmt =

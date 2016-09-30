@@ -19,7 +19,7 @@ module Expr =
       | "==" -> toi (l == r)
       | "!=" -> toi (l != r)
       | _ -> failwith "wrong op"
-    
+
     let rec eval state expr =
       match expr with
       | Const n          -> n

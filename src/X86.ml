@@ -204,10 +204,9 @@ let print_code code b =
     | X86_Label s -> Buffer.add_string b @@ Printf.sprintf "%s:\n" s
   ) code
 
-(*
-let print_compiled: Expr.t -> string = fun stmt ->
+let print_compiled: Stmt.t -> string = fun stmt ->
   let buffer = Buffer.create 1024 in
-  let asm = x86compile (compile_stmt stmt) in
+  let asm = x86compile (StackMachine.Compile.stmt stmt) in
   let vars = collect_vars stmt in
   Buffer.add_string buffer "\t.extern read\n\t.extern write\n\t.global main\n\n\t.text\n";
   print_code asm buffer;
@@ -216,9 +215,15 @@ let print_compiled: Expr.t -> string = fun stmt ->
   ) vars;
   Buffer.contents buffer
 
-let build: stmt -> string -> int = fun stmt file ->
+let build: Stmt.t -> string -> int = fun stmt file ->
   let outf = open_out (Printf.sprintf "%s.s" file) in
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
   Sys.command (Printf.sprintf "gcc -o %s ../runtime/runtime.o %s.s" file file)
-*)
+
+let run file stmt =
+  let res = build stmt file in
+  if res == 0 then
+    if Sys.command (Printf.sprintf "./%s" file) == 0 then ()
+    else failwith "Compiled program failed!"
+  else failwith "Compilation failed!"
