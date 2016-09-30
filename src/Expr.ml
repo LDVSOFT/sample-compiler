@@ -295,7 +295,7 @@ let x86compile : instr list -> x86instr list = fun code ->
    in
    x86code @ x86compile' stack' code'
   in
-  (X86Mov (x86esp, x86ebp))::x86compile' [] code
+  [X86Push x86ebp; X86Mov (x86esp, x86ebp)] @ x86compile' [] code @ [X86Xor (x86eax, x86eax); X86Pop x86ebp; X86Ret]
 
 let print_code code b =
   let rec pr_op opnd =
@@ -339,8 +339,7 @@ let print_code code b =
     | X86Jmp  s       -> Buffer.add_string b @@ Printf.sprintf "\tJMP  \t%s\n" s
     | X86Jne s        -> Buffer.add_string b @@ Printf.sprintf "\tJNE  \t%s\n" s
     | X86_Label s -> Buffer.add_string b @@ Printf.sprintf "%s:\n" s
-  ) code;
-  Buffer.add_string b @@ Printf.sprintf "\tXORL\t%s,\t%s\n\tRET\n\n" (pr_op x86eax) (pr_op x86eax)
+  ) code
 
 let print_compiled: stmt -> string = fun stmt ->
   let buffer = Buffer.create 1024 in
