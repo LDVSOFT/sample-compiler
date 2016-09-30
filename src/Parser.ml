@@ -24,8 +24,8 @@ ostap (
     %"read" "(" name:IDENT ")"                   { Read name }
   | %"write" "(" e:expr ")"                      { Write e }
   | %"skip"                                      { Skip }
-  | %"if" "(" cond:expr ")" "{" body:stmt "}"    { If (cond, body) }
-  | %"while" "(" cond:expr ")" "{" body:stmt "}" { While (cond, body) }
+  | %"if" "(" cond:expr ")" "{" body:stmts "}"    { If (cond, body) }
+  | %"while" "(" cond:expr ")" "{" body:stmts "}" { While (cond, body) }
   | x:IDENT ":=" e:expr                          { Assign (x, e) }
 )
 
