@@ -357,5 +357,5 @@ let build: stmt -> string -> int = fun stmt file ->
   let outf = open_out (Printf.sprintf "%s.s" file) in
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
-  Sys.command (Printf.sprintf "gcc -o %s runtime/runtime.o %s.s" file file)
+  Sys.command (Printf.sprintf "gcc -o %s ../runtime/runtime.o %s.s" file file)
 
