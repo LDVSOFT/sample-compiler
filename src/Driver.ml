@@ -36,7 +36,7 @@ let main = ()
       in
       (match mode with
        | `X86 ->
-           X86.run (Filename.chop_suffix filename ".expr") stmt
+         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt
        | `SM  ->
          let input = read [] in
          let output =

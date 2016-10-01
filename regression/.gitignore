@@ -1,5 +1,6 @@
 !Makefile
 test*
+generated*
 !orig/*
-!test*.expr
-!test*.input
+!*.expr
+!*.input

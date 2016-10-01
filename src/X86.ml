@@ -118,7 +118,7 @@ let x86compile : i list -> x86instr list = fun code ->
           | "-"  -> X86Sub (l, r)
           | "*"  -> X86Mul (l, r)
           | "&&" -> X86And (l, r)
-          | "||" -> X86Or  (l, r)
+          | "!!" -> X86Or  (l, r)
           | _ -> invalid_arg ""
         in
         let x86compile_op1 op l = match op with
@@ -136,9 +136,9 @@ let x86compile : i list -> x86instr list = fun code ->
         in
         let y::x::stack' = stack in (x::stack', (
           match op with
-          | "+" | "-" | "*" | "&&" | "||" -> (
+          | "+" | "-" | "*" | "&&" | "!!" -> (
             let checkBool t = match op with
-            | "&&" | "||" -> [X86Mov (t, x86eax); X86Mov (L 0, re_buf); X86Cmp (L 0, x86eax); X86Setne re_buf; X86Mov (re_buf, t)]
+            | "&&" | "!!" -> [X86Mov (t, x86eax); X86Mov (L 0, re_buf); X86Cmp (L 0, x86eax); X86Setne re_buf; X86Mov (re_buf, t)]
             | _ -> []
             in
             checkBool x @ checkBool y @ protect x op_buf (fun x' -> [x86compile_op2 op y x'])
@@ -182,7 +182,7 @@ let print_code code b =
     | X86Add (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tADDL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
     | X86Sub (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tSUBL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
     | X86Mul (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tIMULL\t%s,\t%s\n" (pr_op o1) (pr_op o2)
-    | X86And (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tADDL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
+    | X86And (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tANDL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
     | X86Or  (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tORL  \t%s,\t%s\n" (pr_op o1) (pr_op o2)
     | X86Xor (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tXORL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
     | X86Mov (o1, o2) -> Buffer.add_string b @@ Printf.sprintf "\tMOVL \t%s,\t%s\n" (pr_op o1) (pr_op o2)
@@ -215,15 +215,12 @@ let print_compiled: Stmt.t -> string = fun stmt ->
   ) vars;
   Buffer.contents buffer
 
-let build: Stmt.t -> string -> int = fun stmt file ->
+let build: string -> Stmt.t -> int = fun file stmt ->
   let outf = open_out (Printf.sprintf "%s.s" file) in
+  let runtime_dir = try
+    Sys.getenv "RC_RUNTIME"
+    with Not_found -> "../runtime"
+  in
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
-  Sys.command (Printf.sprintf "gcc -o %s ../runtime/runtime.o %s.s" file file)
-
-let run file stmt =
-  let res = build stmt file in
-  if res == 0 then
-    if Sys.command (Printf.sprintf "./%s" file) == 0 then ()
-    else failwith "Compiled program failed!"
-  else failwith "Compilation failed!"
+  Sys.command (Printf.sprintf "gcc -o %s %s/runtime.o %s.s" file runtime_dir file)

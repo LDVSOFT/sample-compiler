@@ -9,8 +9,9 @@ module Expr =
     | Op    of string * t * t
 
     ostap (
-      parse: bol;
+      parse: log;
 
+      log: l:bol suf:(("!!"|"&&")                   bol)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
       bol: l:add suf:(("<="|"<"|">="|">"|"=="|"!=") add)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
       add: l:mul suf:(("+"|"-")                     mul)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
       mul: l:pri suf:(("*"|"/"|"%")                 pri)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
