@@ -31,7 +31,7 @@ module Stmt =
     | Write  of Expr.t
     | Assign of string * Expr.t
     | Seq    of t * t
-    | If     of Expr.t * t
+    | If     of Expr.t * t * t
     | While  of Expr.t * t
 
     ostap (
@@ -40,11 +40,11 @@ module Stmt =
       | stmt;
 
       stmt:
-        %"read" "(" name:IDENT ")"                             { Read name }
-      | %"write" "(" e:!(Expr.parse) ")"                       { Write e }
-      | %"skip"                                                { Skip }
-      | %"if"    "(" cond:!(Expr.parse) ")" "{" body:parse "}" { If (cond, body) }
-      | %"while" "(" cond:!(Expr.parse) ")" "{" body:parse "}" { While (cond, body) }
-      | x:IDENT ":=" e:!(Expr.parse)                           { Assign (x, e) }
+        %"read" "(" name:IDENT ")"                                    { Read name }
+      | %"write" "(" e:!(Expr.parse) ")"                              { Write e }
+      | %"skip"                                                       { Skip }
+      | %"if" cond:!(Expr.parse) "then" b1:parse "else" b2:parse "fi" { If (cond, b1, b2) }
+      | %"while" cond:!(Expr.parse) "do" body:parse "od"              { While (cond, body) }
+      | x:IDENT ":=" e:!(Expr.parse)                                  { Assign (x, e) }
     )
   end

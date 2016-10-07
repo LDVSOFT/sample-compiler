@@ -35,13 +35,13 @@ module Stmt =
       let rec run' ((state, input, output) as c) stmt =
         let state' x = List.assoc x state in
         match stmt with
-        | Skip                -> c
-        | Seq    (l, r)       -> run' (run' c l) r
-        | Assign (x, e)       -> ((x, Expr.eval state' e) :: state, input, output)
-        | If     (cond, code) -> if Expr.eval state' cond != 0 then run' c code else c
-        | While  (cond, code) -> if Expr.eval state' cond != 0 then run' c (Seq (code, stmt)) else c
-        | Write  e            -> (state, input, output @ [Expr.eval state' e])
-        | Read   x            ->
+        | Skip                  -> c
+        | Seq    (l, r)         -> run' (run' c l) r
+        | Assign (x, e)         -> ((x, Expr.eval state' e) :: state, input, output)
+        | If     (cond, b1, b2) -> if Expr.eval state' cond != 0 then run' c b1 else run' c b2
+        | While  (cond, code)   -> if Expr.eval state' cond != 0 then run' c (Seq (code, stmt)) else c
+        | Write  e              -> (state, input, output @ [Expr.eval state' e])
+        | Read   x              ->
            let y::input' = input in
            ((x, y) :: state, input', output)
       in

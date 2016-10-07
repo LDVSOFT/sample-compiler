@@ -14,7 +14,7 @@ let rec collect_vars stmt =
   in
   match stmt with
   | Skip -> SS.empty
-  | If (l, r) -> SS.union (collect_vars_expr l) (collect_vars r)
+  | If (l, b1, b2) -> SS.union (collect_vars_expr l) @@ SS.union (collect_vars b1) (collect_vars b2)
   | While (l, r) -> SS.union (collect_vars_expr l) (collect_vars r)
   | Seq (l, r) -> SS.union (collect_vars l) (collect_vars r)
   | Assign (x, e) -> SS.union (SS.singleton x) (collect_vars_expr e)
