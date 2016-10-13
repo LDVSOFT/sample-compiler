@@ -40,6 +40,7 @@ module Stmt =
         | Assign (x, e)         -> ((x, Expr.eval state' e) :: state, input, output)
         | If     (cond, b1, b2) -> if Expr.eval state' cond != 0 then run' c b1 else run' c b2
         | While  (cond, code)   -> if Expr.eval state' cond != 0 then run' c (Seq (code, stmt)) else c
+        | Repeat (cond, code)   -> run' c @@ Seq (code, While (Op ("==", cond, Const 0), code))
         | Write  e              -> (state, input, output @ [Expr.eval state' e])
         | Read   x              ->
            let y::input' = input in

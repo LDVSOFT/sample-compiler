@@ -6,9 +6,9 @@ TESTS=$(sort $(basename $(wildcard test*.expr)))
 check: $(TESTS) 
 
 $(TESTS): %: %.expr
-	../src/rc.byte -o $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
-	cat $@.input | ../src/rc.byte    $< > $@.log && diff $@.log orig/$@.log
-	cat $@.input | ../src/rc.byte -s $< > $@.log && diff $@.log orig/$@.log
+	../src/rc.byte -o $< && ./$@ < $@.input > $@.log && diff $@.log orig/$@.log
+	../src/rc.byte    $< < $@.input > $@.log && diff $@.log orig/$@.log
+	../src/rc.byte -s $< < $@.input > $@.log && diff $@.log orig/$@.log
 
 clean:
 	rm -f test*.log *.s *~ $(TESTS)

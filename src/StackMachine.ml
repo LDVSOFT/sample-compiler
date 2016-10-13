@@ -101,6 +101,16 @@ module Compile =
             [S_JMP label_begin; S_LABEL label_end],
             i'
           )
+        | Repeat (cond, code) ->
+          let label_begin = "repeat_" ^ string_of_int i ^ "_begin" in
+          let (body, i') = compile_stmt' code (i + 1) in
+          (
+            [S_LABEL label_begin] @
+            body @
+            expr (Op ("==", cond, Const 0))  @
+            [S_JIF label_begin],
+            i'
+          )
       in
       let (res, _) = compile_stmt' s 0 in
       res

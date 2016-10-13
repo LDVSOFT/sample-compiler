@@ -1,25 +1,7 @@
-module SS = Set.Make(String)
-
 open Language
 open Expr
 open Stmt
 open StackMachine
-
-let rec collect_vars stmt =
-  let rec collect_vars_expr expr =
-    match expr with
-    | Const _ -> SS.empty
-    | Var s -> SS.singleton s
-    | Op (_, l, r) -> SS.union (collect_vars_expr l) (collect_vars_expr r)
-  in
-  match stmt with
-  | Skip -> SS.empty
-  | If (l, b1, b2) -> SS.union (collect_vars_expr l) @@ SS.union (collect_vars b1) (collect_vars b2)
-  | While (l, r) -> SS.union (collect_vars_expr l) (collect_vars r)
-  | Seq (l, r) -> SS.union (collect_vars l) (collect_vars r)
-  | Assign (x, e) -> SS.union (SS.singleton x) (collect_vars_expr e)
-  | Write e -> collect_vars_expr e
-  | Read x -> SS.singleton x
 
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
 let x86regs8 = [|"spl"; "%bpl"; "%al"; "%dl"; "%bl"; "%cl"; "%sil"; "%dil"|]
@@ -197,7 +179,7 @@ let print_code code b =
 let print_compiled: Stmt.t -> string = fun stmt ->
   let buffer = Buffer.create 1024 in
   let asm = x86compile (StackMachine.Compile.stmt stmt) in
-  let vars = collect_vars stmt in
+  let vars = Stmt.collect_vars stmt in
   Buffer.add_string buffer "\t.extern read\n\t.extern write\n\t.global main\n\n\t.text\n";
   print_code asm buffer;
   SS.iter (fun var ->
