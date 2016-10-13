@@ -1,0 +1,7 @@
+read(x);
+read(y);
+z := 1;
+for i := 1, i <= y, i := i + 1 do
+  z := z * x
+od;
+write(z)

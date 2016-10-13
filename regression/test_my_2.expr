@@ -1,0 +1,6 @@
+z := 0;
+repeat
+  read(y);
+  z := z + y
+until y == 0;
+write(z)
