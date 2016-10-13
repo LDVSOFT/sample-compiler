@@ -1,4 +1,5 @@
 open Ostap
+open Matcher
 
 let parse infile =
   let s = Util.read infile in
@@ -8,9 +9,9 @@ let parse infile =
        inherit Util.Lexers.ident ["read"; "write"; "skip"] s
        inherit Util.Lexers.decimal s
        inherit Util.Lexers.skip [
-	 Matcher.Skip.whitespaces " \t\n";
-	 Matcher.Skip.lineComment "--";
-	 Matcher.Skip. nestedComment "(*" "*)"
+         Matcher.Skip.whitespaces " \t\n";
+         Matcher.Skip.lineComment "--";
+         Matcher.Skip. nestedComment "(*" "*)"
        ] s
      end
     )
@@ -25,28 +26,28 @@ let main = ()
       | _    -> `Int, Sys.argv.(1)
     in
     match parse filename with
-    | `Ok stmt -> 
-	(match mode with
-	 | `X86 ->
-             let basename = Filename.chop_suffix filename ".expr" in 
-	     X86.build stmt basename
-	 | _ ->
-	     let rec read acc =
-	       try
-		 let r = read_int () in
-		 Printf.printf "> ";
-		 read (acc @ [r]) 
-               with End_of_file -> acc
-	     in
-	     let input = read [] in
-	     let output =
-	       match mode with
-	       | `SM -> StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
-	       | _   -> Interpreter.Stmt.eval input stmt
-	     in
-	     List.iter (fun i -> Printf.printf "%d\n" i) output
-	)
-
+    | `Ok stmt ->
+      let rec read acc =
+        try
+          let r = read_int () in
+          Printf.printf "> ";
+          read (acc @ [r])
+        with End_of_file -> acc
+      in
+      (match mode with
+       | `X86 ->
+         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt
+       | `SM  ->
+         let input = read [] in
+         let output =
+           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
+         in
+         List.iter (fun i -> Printf.printf "%d\n" i) output
+       | `Int ->
+         let input = read [] in
+         let output = Interpreter.Stmt.eval input stmt in
+         List.iter (fun i -> Printf.printf "%d\n" i) output
+      )
     | `Fail er -> Printf.eprintf "%s" er
-  with 
+  with
   | Invalid_argument _ -> Printf.printf "Usage: rc.byte <name.expr>"
