@@ -133,7 +133,7 @@ let x86compile : i list -> x86instr list = fun code ->
           match op with
           | "+" | "-" | "*" | "&&" | "!!" -> (
             let checkBool t = match op with
-            | "&&" | "!!" -> [X86Mov (t, x86eax); X86Mov (L 0, re_buf); X86Cmp (L 0, x86eax); X86Setne re_buf; X86Mov (re_buf, t)]
+            | "&&" | "!!" -> [X86Mov (t, x86eax); X86Mov (L 0, re_buf); X86Cmp (L 0, x86eax); X86SetCC ("NE", re_buf); X86Mov (re_buf, t)]
             | _ -> []
             in
             checkBool x @ checkBool y @ protect x op_buf (fun x' -> [x86compile_op2 op y x'])
