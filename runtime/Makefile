@@ -1,6 +1,6 @@
 all:
-	gcc -m32 -c runtime.c
+	gcc -c runtime.c
 
 clean:
-	rm -f runtime.o *~
+	rm runtime.o *~
 
