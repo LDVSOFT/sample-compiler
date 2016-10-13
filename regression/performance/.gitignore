@@ -1,0 +1,6 @@
+c*
+expr*
+!*.c
+!*.expr
+*.data
+data.gnuplot
