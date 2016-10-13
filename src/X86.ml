@@ -213,4 +213,4 @@ let build: string -> Stmt.t -> int = fun file stmt ->
   in
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
-  Sys.command (Printf.sprintf "gcc -o %s %s/runtime.o %s.s" file runtime_dir file)
+  Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" file runtime_dir file)
