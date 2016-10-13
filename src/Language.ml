@@ -9,12 +9,13 @@ module Expr =
     | Op    of string * t * t
 
     ostap (
-      parse: log;
+      parse: log_or;
 
-      log: l:bol suf:(("!!"|"&&")                   bol)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
-      bol: l:add suf:(("<="|"<"|">="|">"|"=="|"!=") add)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
-      add: l:mul suf:(("+"|"-")                     mul)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
-      mul: l:pri suf:(("*"|"/"|"%")                 pri)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
+      log_or : l:log_and suf:( "!!"                         log_and)* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
+      log_and: l:bol     suf:( "&&"                         bol    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
+      bol:     l:add     suf:(("<="|"<"|">="|">"|"=="|"!=") add    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
+      add:     l:mul     suf:(("+"|"-")                     mul    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
+      mul:     l:pri     suf:(("*"|"/"|"%")                 pri    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
 
       pri:
         l:DECIMAL        {Const l}
