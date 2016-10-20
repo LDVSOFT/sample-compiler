@@ -4,3 +4,4 @@ expr*
 !*.expr
 *.data
 data.gnuplot
+graph.pdf
