@@ -12,9 +12,11 @@ config.status
 *.a
 *.o
 *.byte
+*.native
 META
 .depend
 *~
 *.swp
 configure
 aclocal.m4
+_build
