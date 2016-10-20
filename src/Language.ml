@@ -1,6 +1,7 @@
 module SS = Set.Make(String)
 open Ostap
 open Matcher
+open Utils
 
 module Expr =
   struct
@@ -67,8 +68,8 @@ module Stmt =
         { Write e }
       | x:IDENT ":=" e:!(Expr.parse)
         { Assign (x, e) }
-      | %"if" cond:!(Expr.parse) %"then" b1:parse %"else" b2:parse %"fi"
-        { If (cond, b1, b2) }
+      | %"if" cond1:!(Expr.parse) %"then" b1:parse suf:(%"elif" !(Expr.parse) %"then" parse)* last:(%"else" else_body:parse)? %"fi"
+        { List.fold_right (fun (c, b) e -> If (c, b, e)) ((cond1, b1)::suf) (default (Skip) last) }
       | %"while" cond:!(Expr.parse) %"do" body:parse %"od"
         { While (cond, body) }
       | %"repeat" body:parse %"until" cond:!(Expr.parse)

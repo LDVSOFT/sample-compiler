@@ -7,7 +7,7 @@ let parse infile =
     (object
        inherit Matcher.t s
        inherit Util.Lexers.ident [
-         "read"; "write"; "skip"; "if"; "else"; "fi";
+         "read"; "write"; "skip"; "if"; "else"; "elif"; "fi";
          "while"; "do"; "od"; "repeat"; "until";
          "for"
        ] s
