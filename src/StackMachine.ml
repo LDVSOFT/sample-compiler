@@ -90,13 +90,12 @@ module Compile =
           )
         | While (cond, code) ->
           let label_begin = "while_" ^ string_of_int i ^ "_begin" in
-          let label_true  = "while_" ^ string_of_int i ^ "_true" in
           let label_end   = "while_" ^ string_of_int i ^ "_end" in
           let (body, i') = compile_stmt' code (i + 1) in
           (
             [S_LABEL label_begin] @
-            expr cond @
-            [S_JIF label_true; S_JMP label_end; S_LABEL label_true] @
+            expr (Op ("==", cond, Const 0)) @
+            [S_JIF label_end] @
             body @
             [S_JMP label_begin; S_LABEL label_end],
             i'
