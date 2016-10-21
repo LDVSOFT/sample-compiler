@@ -151,7 +151,7 @@ let print_code code b =
   let rec pr_op8 opnd =
     match opnd with
     | R n -> x86regs8.(n)
-    | S o -> Printf.sprintf "%d(%s)" ((-4) * o) (pr_op x86ebp)
+    | S o -> Printf.sprintf "%d(%s)" ((-4) * (o + 1)) (pr_op x86ebp)
     | M s -> s
     | L n -> Printf.sprintf "$%d" n
   in
