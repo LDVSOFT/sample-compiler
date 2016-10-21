@@ -10,7 +10,7 @@ complete:
 	paste -d'\t' names.data o0.data expr.data o3.data >> data.gnuplot && gnuplot script.gnuplot
 
 prepare: 
-	rm -rf *.data && for i in $(TESTS) ; do echo $$i >> names.data ; done && echo -e "Test\tgcc-O0\texpr\tgcc-O3" > data.gnuplot
+	rm -rf *.data && for i in $(TESTS) ; do echo $$i >> names.data ; done && echo -e "gcc-O0\texpr\tgcc-O3" > data.gnuplot
 
 $(CTESTS): %: %.c 
 	gcc -o $@-O0 -m32 -O0 $< && /usr/bin/time -o o0.data --append -f '%U' ./$@-O0 < /dev/null > $@.log && diff $@.log orig/`echo $@.log | sed 's/^c/expr/'` 
