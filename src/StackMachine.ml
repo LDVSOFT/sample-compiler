@@ -8,6 +8,7 @@ type i =
 | S_OP    of string
 | S_JMP   of string
 | S_JIF   of string
+| S_COMM  of string
 
 module Interpreter =
   struct
@@ -36,7 +37,7 @@ module Interpreter =
           | S_OP op ->
               let y::x::stack' = stack in
               (state, (Expr.eval_op op x y)::stack', input, output, i + 1)
-          | S_LABEL _ ->
+          | S_LABEL _ | S_COMM _ ->
               (state, stack, input, output, i + 1)
           | S_JMP label ->
               let where = find code @@ S_LABEL label in
@@ -58,17 +59,17 @@ module Compile =
     open Language.Stmt
 
     let rec expr = function
-    | Var x         -> [S_LD   x]
-    | Const n       -> [S_PUSH n]
-    | Op (op, l, r) -> expr l @ expr r @ [S_OP op]
+    | Var x         -> [S_COMM x; S_LD   x]
+    | Const n       -> [S_COMM (Printf.sprintf "=%d" n); S_PUSH n]
+    | Op (op, l, r) -> expr l @ expr r @ [S_COMM op; S_OP op]
 
-    let stmt s =
+    let stmt: Language.Stmt.t -> i list = fun s ->
       let rec compile_stmt' s i =
         match s with
-        | Skip               -> ([], i)
-        | Assign (x, e)      -> (expr e @ [S_ST x], i)
-        | Read x             -> ([S_READ; S_ST x], i)
-        | Write e            -> (expr e @ [S_WRITE], i)
+        | Skip               -> ([S_COMM "Skip"], i)
+        | Assign (x, e)      -> ([S_COMM (Printf.sprintf "Assign %s..." x)] @ expr e @ [S_ST x], i)
+        | Read x             -> ([S_COMM (Printf.sprintf "Read %s" x); S_READ; S_ST x], i)
+        | Write e            -> ([S_COMM "Write..."] @ expr e @ [S_WRITE], i)
         | Seq (l, r)         ->
           let (res' , i' ) = compile_stmt' l i  in
           let (res'', i'') = compile_stmt' r i' in
@@ -80,12 +81,13 @@ module Compile =
           let (b1, i') = compile_stmt' c1 (i + 1) in
           let (b2, i'') = compile_stmt' c2 i' in
           (
+            [S_COMM "If..."] @
             expr cond @
-            [S_JIF label_true] @
+            [S_JIF label_true; S_COMM "Else..."] @
             b2 @
-            [S_JMP label_end; S_LABEL label_true] @
+            [S_JMP label_end; S_LABEL label_true; S_COMM "Then..."] @
             b1 @
-            [S_LABEL label_end],
+            [S_LABEL label_end; S_COMM "EndIf"],
             i''
           )
         | While (cond, code) ->
@@ -93,21 +95,22 @@ module Compile =
           let label_end   = "while_" ^ string_of_int i ^ "_end" in
           let (body, i') = compile_stmt' code (i + 1) in
           (
-            [S_LABEL label_begin] @
+            [S_LABEL label_begin; S_COMM "While..."] @
             expr (Op ("==", cond, Const 0)) @
-            [S_JIF label_end] @
+            [S_JIF label_end; S_COMM "Do..."] @
             body @
-            [S_JMP label_begin; S_LABEL label_end],
+            [S_JMP label_begin; S_LABEL label_end; S_COMM "EndWhile"],
             i'
           )
         | Repeat (cond, code) ->
           let label_begin = "repeat_" ^ string_of_int i ^ "_begin" in
           let (body, i') = compile_stmt' code (i + 1) in
           (
-            [S_LABEL label_begin] @
+            [S_LABEL label_begin; S_COMM "Repeat"] @
             body @
+            [S_COMM "Until"] @
             expr (Op ("==", cond, Const 0))  @
-            [S_JIF label_begin],
+            [S_JIF label_begin; S_COMM "EndRepeat"],
             i'
           )
       in

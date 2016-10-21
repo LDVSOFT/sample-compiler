@@ -41,6 +41,7 @@ type x86instr = (* src -> dest *)
   | X86Jmp   of string
   | X86Jne   of string
   | X86_Label of string
+  | X86_Comm  of string
 
 let x86compile : i list -> x86instr list = fun code ->
   let x86addStack s =
@@ -61,6 +62,8 @@ let x86compile : i list -> x86instr list = fun code ->
     | i::code' ->
     let (stack', x86code) =
       match i with
+      | S_COMM comm ->
+        (stack, [X86_Comm (Printf.sprintf "Stack: %s" comm)])
       | S_LABEL label ->
         (stack, [X86_Label label])
       | S_JMP label ->
@@ -174,6 +177,7 @@ let print_code code b =
     | X86Jmp  s        -> Buffer.add_string b @@ Printf.sprintf "\tJMP  \t%s\n" s
     | X86Jne s         -> Buffer.add_string b @@ Printf.sprintf "\tJNE  \t%s\n" s
     | X86_Label s -> Buffer.add_string b @@ Printf.sprintf "%s:\n" s
+    | X86_Comm  s -> Buffer.add_string b @@ Printf.sprintf "\t#%s\n" s
   ) code
 
 let print_compiled: Stmt.t -> string = fun stmt ->
