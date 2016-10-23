@@ -19,7 +19,7 @@ let parse infile =
        ] s
      end
     )
-    (ostap (!(Language.Stmt.parse) -EOF))
+    (ostap (!(Language.Program.parse) -EOF))
 
 let main = ()
   try
@@ -40,16 +40,16 @@ let main = ()
       in
       (match mode with
        | `X86 ->
-         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt
+         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt.main
        | `SM  ->
          let input = read [] in
          let output =
-           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
+           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt.main)
          in
          List.iter (fun i -> Printf.printf "%d\n" i) output
        | `Int ->
          let input = read [] in
-         let output = Interpreter.Stmt.eval input stmt in
+         let output = Interpreter.Program.eval input stmt in
          List.iter (fun i -> Printf.printf "%d\n" i) output
       )
     | `Fail er -> Printf.eprintf "%s" er

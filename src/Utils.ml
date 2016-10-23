@@ -9,3 +9,8 @@ let default: 'a -> 'a option -> 'a = fun d v ->
   match v with
   | Some x -> x
   | None   -> d
+
+let collect_args: ('a * 'a list) option -> 'a list = fun x ->
+  match x with
+  | None              -> []
+  | Some (head, tail) -> head::tail
