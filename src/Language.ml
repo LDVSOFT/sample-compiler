@@ -102,7 +102,7 @@ module Program =
     type t = {funcs: (string * func) list; main: Stmt.t}
 
     ostap (
-      parse: f:(funcdef -";")* m:!(Stmt.parse)
+      parse: f:funcdef* m:!(Stmt.parse)
         { {funcs = f; main = m} };
 
       funcdef: %"fun" f:IDENT "(" args:(IDENT (-"," IDENT)*)? ")" "begin" b:!(Stmt.parse) "end"

@@ -180,6 +180,7 @@ let print_code code b =
     | X86_Comm  s -> Buffer.add_string b @@ Printf.sprintf "\t#%s\n" s
   ) code
 
+(*
 let print_compiled: Stmt.t -> string = fun stmt ->
   let buffer = Buffer.create 1024 in
   let asm = x86compile (StackMachine.Compile.stmt stmt) in
@@ -200,3 +201,5 @@ let build: string -> Stmt.t -> int = fun file stmt ->
   Printf.fprintf outf "%s" (print_compiled stmt);
   close_out outf;
   Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" file runtime_dir file)
+*)
+let build _ _ = failwith "Temporary unsupported"
