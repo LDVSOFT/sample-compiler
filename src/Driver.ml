@@ -9,7 +9,7 @@ let parse infile =
        inherit Util.Lexers.ident [
          "read"; "write"; "skip"; "if"; "else"; "elif"; "fi";
          "while"; "do"; "od"; "repeat"; "until";
-         "for"
+         "for"; "fun"; "return"
        ] s
        inherit Util.Lexers.decimal s
        inherit Util.Lexers.skip [
@@ -40,11 +40,11 @@ let main = ()
       in
       (match mode with
        | `X86 ->
-         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt.main
+         ignore @@ X86.build (Filename.chop_suffix filename ".expr") stmt
        | `SM  ->
          let input = read [] in
          let output =
-           StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt.main)
+           StackMachine.Interpreter.run input (StackMachine.Compile.program stmt)
          in
          List.iter (fun i -> Printf.printf "%d\n" i) output
        | `Int ->

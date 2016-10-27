@@ -99,11 +99,11 @@ module Stmt =
 module Program =
   struct
     type func = {args: string list; body: Stmt.t}
-    type t = {funcs: (string * func) list; main: Stmt.t}
+    type t = {funcs: (string * func) list}
 
     ostap (
       parse: f:funcdef* m:!(Stmt.parse)
-        { {funcs = f; main = m} };
+        { {funcs = ("main", {args = []; body = m})::f} };
 
       funcdef: %"fun" f:IDENT "(" args:(IDENT (-"," IDENT)*)? ")" "begin" b:!(Stmt.parse) "end"
         { (f, {args = collect_args args; body = b}) }

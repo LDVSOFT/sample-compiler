@@ -50,6 +50,7 @@ module Expr =
 
 module Stmt =
   struct
+    open Language.Expr
     open Language.Stmt
 
     let rec eval (state: stmt_state_t) (invoke: invoke_t) (stmt: t): stmt_state_t =
@@ -97,18 +98,17 @@ module Program =
     open Language.Program
 
     let eval (input: int list) (program: t) =
-      let rec invoke: invoke_t = fun name args io ->
+      let rec invoke': bool -> invoke_t = fun must_ret name args io ->
         let func = List.assoc name program.funcs in
         let state = {expr = {vars = List.map2 (fun a b -> (a, b)) func.args args; io = io}; result = None} in
-        let state' = Stmt.eval state invoke func.body in
+        let state' = Stmt.eval state (invoke' true) func.body in
         let res = match state'.result with
-          | None   -> failwith @@ Printf.sprintf "Funtion %s has not returned a value" name
-          | Some x -> x
+        | Some x                 -> x
+        | None when not must_ret -> 0
+        | _                      -> failwith "Function has not returned a value"
         in
         (res, state'.expr.io)
       in
-      let state' = Stmt.eval {expr = {vars = []; io = {input = input; output = []}}; result = None} invoke program.main in
-      match state'.result with
-      | Some _ -> failwith "Result in a main scope!"
-      | None   -> state'.expr.io.output
+      let (_, io') = invoke' false "main" [] {input = input; output = []} in
+      io'.output
   end
