@@ -1,6 +1,6 @@
 type i =
 | S_LABEL of string
-| S_FUNC  of string (*the same as label, for functions.*)
+| S_ENTER of string list
 | S_READ
 | S_WRITE
 | S_PUSH  of int
@@ -10,7 +10,7 @@ type i =
 | S_OP    of string
 | S_JMP   of string
 | S_JIF   of string
-| S_CALL  of string * string list
+| S_CALL  of string
 | S_RET
 | S_COMM  of string
 
@@ -59,7 +59,7 @@ module Interpreter =
           | S_OP op ->
             let y::x::stack' = state.stack in
             run' {next_state with stack = (Expr.eval_op op x y)::stack'}
-          | S_LABEL _ | S_FUNC _ | S_COMM _ ->
+          | S_LABEL _ | S_COMM _ ->
             run' next_state
           | S_JMP label ->
             let where = find code @@ S_LABEL label in
@@ -69,18 +69,21 @@ module Interpreter =
             let where = find code @@ S_LABEL label in
             run' @@ if y == 0 then next_state
             else {state with frame = {state.frame with ip = where}}
-          | S_CALL (func, params) ->
-            let where = find code @@ S_FUNC func in
+          | S_CALL func ->
+            let where = find code @@ S_LABEL func in
+            run' {state with callstack = state.frame::state.callstack; frame = {vars = []; ip = where}}
+          | S_ENTER params ->
             let params' = List.rev params in
-            let (stack', substate) =
+            let (stack', vars') =
               let rec f (stack: int list) (substate: (string * int) list) (params: string list): (int list * (string * int) list) =
                 match params with
                 | []         -> (stack, substate)
                 | v::params' ->
                   let y::stack' = stack in
                   f stack' ((v, y)::substate) params'
-              in f state.stack [] params'
-            in run' {state with stack = stack'; callstack = state.frame::state.callstack; frame = {vars = substate; ip = where}}
+              in f state.stack next_state.frame.vars params'
+            in
+            run' {next_state with frame = {next_state.frame with vars = vars'}; stack = stack'}
           | S_RET ->
             match state.callstack with
             | [] -> state
@@ -88,7 +91,7 @@ module Interpreter =
               run' {state with frame = {frame with ip = frame.ip + 1}; callstack = callstack'}
          )
       in
-      let enter_point = find code @@ S_FUNC "main" in
+      let enter_point = find code @@ S_LABEL "main" in
       let state = {frame = {ip = enter_point; vars = []}; callstack = []; stack = []; input = input; output = []} in
       let state' = run' state in
       state'.output
@@ -124,7 +127,7 @@ module Compile =
         (List.concat @@ List.map expr ps) @
         [
           S_COMM (Printf.sprintf "Call %s" f);
-          S_CALL (f, func.args)
+          S_CALL f
         ]
       in
       let stmt (name: string) (s: Language.Stmt.t): i list =
@@ -202,7 +205,7 @@ module Compile =
             (
               (List.concat @@ List.map expr ps) @ [
               S_COMM (Printf.sprintf "Call %s (proc)" f);
-              S_CALL (f, func.args);
+              S_CALL f;
               S_POP
             ], i)
           | Return e            ->
@@ -216,7 +219,8 @@ module Compile =
       in
       let func (name: string) (f: Language.Program.func): i list = [
         S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
-        S_FUNC name ] @
+        S_LABEL name;
+        S_ENTER f.args ] @
         stmt name @@ Seq (f.body, Return (Const 0))
       in
       List.concat @@ List.map (fun (name, f) -> func name f) p.funcs
