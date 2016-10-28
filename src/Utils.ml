@@ -15,3 +15,12 @@ let collect_args: ('a * 'a list) option -> 'a list = fun x ->
   match x with
   | None              -> []
   | Some (head, tail) -> head::tail
+
+let list_cut (l: 'a list) (n: int): ('a list * 'a list) =
+  let rec f src dst n =
+    if n = 0
+    then (dst, src)
+    else
+      let x::xs = src in
+      f xs (dst @ [x]) (n - 1)
+  in f l [] n

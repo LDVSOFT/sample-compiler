@@ -1,6 +1,6 @@
 type i =
 | S_LABEL of string
-| S_ENTER of string list
+| S_ENTER of string list * string list
 | S_READ
 | S_WRITE
 | S_PUSH  of int
@@ -10,7 +10,7 @@ type i =
 | S_OP    of string
 | S_JMP   of string
 | S_JIF   of string
-| S_CALL  of string
+| S_CALL  of string * int
 | S_RET
 | S_COMM  of string
 
@@ -69,10 +69,10 @@ module Interpreter =
             let where = find code @@ S_LABEL label in
             run' @@ if y == 0 then next_state
             else {state with frame = {state.frame with ip = where}}
-          | S_CALL func ->
+          | S_CALL (func, _) ->
             let where = find code @@ S_LABEL func in
             run' {state with callstack = state.frame::state.callstack; frame = {vars = []; ip = where}}
-          | S_ENTER params ->
+          | S_ENTER (params, _) ->
             let params' = List.rev params in
             let (stack', vars') =
               let rec f (stack: int list) (substate: (string * int) list) (params: string list): (int list * (string * int) list) =
@@ -99,9 +99,10 @@ module Interpreter =
 
 module Compile =
   struct
-    open Language.Expr
-    open Language.Stmt
-    open Language.Program
+    open Language
+    open Expr
+    open Stmt
+    open Program
 
     let program (p: Language.Program.t): i list =
       let rec expr (e: Language.Expr.t): i list = match e with
@@ -127,7 +128,7 @@ module Compile =
         (List.concat @@ List.map expr ps) @
         [
           S_COMM (Printf.sprintf "Call %s" f);
-          S_CALL f
+          S_CALL (f, List.length func.args)
         ]
       in
       let stmt (name: string) (s: Language.Stmt.t): i list =
@@ -156,7 +157,6 @@ module Compile =
             ], i)
           | If (cond, c1, c2)  ->
             let label_true  = name ^ "_if_" ^ string_of_int i ^ "_true"  in
-            let label_false = name ^ "_if_" ^ string_of_int i ^ "_false" in
             let label_end   = name ^ "_if_" ^ string_of_int i ^ "_end"   in
             let (b1, i' ) = stmt' c1 (i + 1) in
             let (b2, i'') = stmt' c2 i' in
@@ -205,7 +205,7 @@ module Compile =
             (
               (List.concat @@ List.map expr ps) @ [
               S_COMM (Printf.sprintf "Call %s (proc)" f);
-              S_CALL f;
+              S_CALL (f, List.length func.args);
               S_POP
             ], i)
           | Return e            ->
@@ -217,11 +217,14 @@ module Compile =
         let (res, _) = stmt' s 0 in
         res
       in
-      let func (name: string) (f: Language.Program.func): i list = [
-        S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
-        S_LABEL name;
-        S_ENTER f.args ] @
-        stmt name @@ Seq (f.body, Return (Const 0))
+      let func (name: string) (f: Language.Program.func): i list =
+        let all_var = Language.Stmt.collect_vars f.body in
+        let local_var = SS.diff all_var (SS.of_list f.args)
+        in [
+          S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
+          S_LABEL name;
+          S_ENTER (f.args, SS.elements local_var)] @
+          stmt name @@ Seq (f.body, Return (Const 0))
       in
       List.concat @@ List.map (fun (name, f) -> func name f) p.funcs
   end
