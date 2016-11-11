@@ -294,7 +294,7 @@ let print_compiled (p: Program.t): string =
   print_code asm buffer;
   Buffer.contents buffer
 
-let build (file: string) (p: Program.t): int =
+let build (file: string) (p: Program.t): unit =
   let outf = open_out (Printf.sprintf "%s.s" file) in
   let runtime_dir = try
     Sys.getenv "RC_RUNTIME"
@@ -302,4 +302,6 @@ let build (file: string) (p: Program.t): int =
   in
   Printf.fprintf outf "%s" (print_compiled p);
   close_out outf;
-  Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" file runtime_dir file)
+  match Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" file runtime_dir file) with
+  | 0 -> ()
+  | _ -> failwith "gcc failed!"
