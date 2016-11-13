@@ -1,7 +1,7 @@
 open Ostap
 open Matcher
 
-let parse infile =
+let parse (infile: string) =
   let s = Util.read infile in
   Util.parse
     (object
@@ -12,14 +12,18 @@ let parse infile =
          "for"; "fun"; "return"
        ] s
        inherit Util.Lexers.decimal s
+       inherit Util.Lexers.char s
+       inherit Util.Lexers.string s
        inherit Util.Lexers.skip [
          Matcher.Skip.whitespaces " \t\n";
          Matcher.Skip.lineComment "--";
-         Matcher.Skip. nestedComment "(*" "*)"
+         Matcher.Skip.nestedComment "(*" "*)"
        ] s
      end
     )
     (ostap (!(Language.Program.parse) -EOF))
+
+open Language
 
 let main = ()
   try
@@ -35,7 +39,7 @@ let main = ()
         try
           let r = read_int () in
           Printf.printf "> ";
-          read (acc @ [r])
+          read (acc @ [Value.Int r])
         with End_of_file -> acc
       in
       (match mode with
@@ -46,11 +50,11 @@ let main = ()
          let output =
            StackMachine.Interpreter.run input (StackMachine.Compile.program stmt)
          in
-         List.iter (fun i -> Printf.printf "%d\n" i) output
+         List.iter (fun i -> Printf.printf "%s\n" @@ Value.print i) output
        | `Int ->
          let input = read [] in
          let output = Interpreter.Program.eval input stmt in
-         List.iter (fun i -> Printf.printf "%d\n" i) output
+         List.iter (fun i -> Printf.printf "%s\n" @@ Value.print i) output
       )
     | `Fail er -> Printf.eprintf "%s\n" er
   with

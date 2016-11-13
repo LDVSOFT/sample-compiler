@@ -2,6 +2,7 @@ open Language
 open Expr
 open Stmt
 open StackMachine
+open Utils
 
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
 let x86regs8 = [|"spl"; "%bpl"; "%al"; "%dl"; "%bl"; "%cl"; "%sil"; "%dil"|]
@@ -55,7 +56,7 @@ let allocate state =
   in (one, {state with stack = one::state.stack})
 
 let free state =
-  let x::stack' = state.stack in
+  let (x, stack') = cut_head state.stack in
   (x, {state with stack = stack'})
 
 let x86compile (code: i list): x86instr list =
@@ -155,7 +156,7 @@ let x86compile (code: i list): x86instr list =
           x86subStackN 1 @
           x86subStack s
         )
-      | S_PUSH n ->
+      | S_PUSH (Int n) ->
         let (s, state') = allocate state in
         (state', [
           X86Mov (L n, s)] @

@@ -16,11 +16,16 @@ let collect_args: ('a * 'a list) option -> 'a list = fun x ->
   | None              -> []
   | Some (head, tail) -> head::tail
 
+let cut_head (l: 'a list): ('a * 'a list) =
+  match l with
+  | x::xs -> (x, xs)
+  | _ -> failwith "List depleted"
+
 let list_cut (l: 'a list) (n: int): ('a list * 'a list) =
   let rec f src dst n =
     if n = 0
     then (dst, src)
     else
-      let x::xs = src in
+      let (x, xs) = cut_head src in
       f xs (dst @ [x]) (n - 1)
   in f l [] n

@@ -1,9 +1,12 @@
+open Utils
+open Language
+
 type i =
 | S_LABEL of string
 | S_ENTER of string list * string list
 | S_READ
 | S_WRITE
-| S_PUSH  of int
+| S_PUSH  of Value.t
 | S_POP
 | S_LD    of string
 | S_ST    of string
@@ -17,22 +20,21 @@ type i =
 module Interpreter =
   struct
     open Interpreter
-    open Utils
 
     type frame_t = {
-      vars: (string * int) list;
+      vars: (string * Value.t) list;
       ip: int
     }
 
     type state_t = {
       frame: frame_t;
-      stack: int list;
+      stack: Value.t list;
       callstack: frame_t list;
-      input: int list;
-      output: int list;
+      input: Value.t list;
+      output: Value.t list;
     }
 
-    let run (input: int list) (code': i list): int list =
+    let run (input: Value.t list) (code': i list): Value.t list =
       let code = Array.of_list code' in
       let rec run' (state: state_t): state_t =
         if state.frame.ip >= Array.length code
@@ -41,33 +43,34 @@ module Interpreter =
           let next_state = {state with frame = {state.frame with ip = state.frame.ip + 1}} in
           match code.(state.frame.ip) with
           | S_READ   ->
-            let y::input' = state.input in
+            let (y, input') = cut_head state.input in
             run' {next_state with stack = y::state.stack; input = input'}
           | S_WRITE  ->
-            let y::stack' = state.stack in
+            let (y, stack') = cut_head state.stack in
             run' {next_state with stack = stack'; output = state.output @ [y]}
           | S_PUSH n ->
             run' {next_state with stack = n::state.stack}
           | S_POP ->
-            let _::stack' = state.stack in
+            let (_, stack') = cut_head state.stack in
             run' {next_state with stack = stack'}
           | S_LD x ->
             run' {next_state with stack = (List.assoc x state.frame.vars)::state.stack}
           | S_ST x ->
-            let y::stack' = state.stack in
+            let (y, stack') = cut_head state.stack in
             run' {state with stack = stack'; frame = {next_state.frame with vars = (x, y)::state.frame.vars}}
           | S_OP op ->
-            let y::x::stack' = state.stack in
-            run' {next_state with stack = (Expr.eval_op op x y)::stack'}
+            let (y, stack' ) = cut_head state.stack in
+            let (x, stack'') = cut_head stack' in
+            run' {next_state with stack = (Expr.eval_op op x y)::stack''}
           | S_LABEL _ | S_COMM _ ->
             run' next_state
           | S_JMP label ->
             let where = find code @@ S_LABEL label in
             run' {state with frame = {state.frame with ip = where}}
           | S_JIF label ->
-            let y::stack' = state.stack in
+            let (y, stack') = cut_head state.stack in
             let where = find code @@ S_LABEL label in
-            run' @@ if y == 0 then next_state
+            run' @@ if Value.toi y == 0 then next_state
             else {state with frame = {state.frame with ip = where}}
           | S_CALL (func, _) ->
             let where = find code @@ S_LABEL func in
@@ -75,11 +78,11 @@ module Interpreter =
           | S_ENTER (params, _) ->
             let params' = List.rev params in
             let (stack', vars') =
-              let rec f (stack: int list) (substate: (string * int) list) (params: string list): (int list * (string * int) list) =
+              let rec f (stack: Value.t list) (substate: (string * Value.t) list) (params: string list): (Value.t list * (string * Value.t) list) =
                 match params with
                 | []         -> (stack, substate)
                 | v::params' ->
-                  let y::stack' = stack in
+                  let (y, stack') = cut_head stack in
                   f stack' ((v, y)::substate) params'
               in f state.stack next_state.frame.vars params'
             in
@@ -100,6 +103,7 @@ module Interpreter =
 module Compile =
   struct
     open Language
+    open Value
     open Expr
     open Stmt
     open Program
@@ -113,7 +117,7 @@ module Compile =
         ]
       | Const n       ->
         [
-          S_COMM (Printf.sprintf "=%d" n);
+          S_COMM (Printf.sprintf "=%s" @@ Value.print n);
           S_PUSH n
         ]
       | Op (op, l, r) ->
@@ -180,7 +184,7 @@ module Compile =
             ([
               S_LABEL label_begin;
               S_COMM "While..."] @
-              expr (Op ("==", cond, Const 0)) @ [
+              expr (Op ("==", cond, Const (Int 0))) @ [
               S_JIF label_end;
               S_COMM "Do..."] @
               body @ [
@@ -196,7 +200,7 @@ module Compile =
               S_COMM "Repeat..."] @
               body @ [
               S_COMM "Until..."] @
-              expr (Op ("==", cond, Const 0)) @ [
+              expr (Op ("==", cond, Const (Int 0))) @ [
               S_JIF label_begin;
               S_COMM "EndRepeat"
             ], i')
@@ -224,7 +228,7 @@ module Compile =
           S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
           S_LABEL name;
           S_ENTER (f.args, SS.elements local_var)] @
-          stmt name @@ Seq (f.body, Return (Const 0))
+          stmt name @@ Seq (f.body, Return (Const (Int 0)))
       in
       List.concat @@ List.map (fun (name, f) -> func name f) p.funcs
   end

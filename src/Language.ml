@@ -3,10 +3,27 @@ open Ostap
 open Matcher
 open Utils
 
+module Value =
+  struct
+    type t =
+    | Int    of int
+    | String of string
+
+    let print x = match x with
+    | Int n    -> string_of_int n
+    | String s -> Printf.sprintf "\"%s\"" s
+
+    ostap (
+      parse:
+        l:DECIMAL {Int l}
+      | s:STRING  {String s}
+    )
+  end
+
 module Expr =
   struct
     type t =
-    | Const of int
+    | Const of Value.t
     | Var   of string
     | Op    of string * t * t
     | Call  of string * t list
@@ -28,8 +45,8 @@ module Expr =
       mul    : l:pri     suf:(("*"|"/"|"%")                 pri    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
 
       pri:
-        l:DECIMAL
-        {Const l}
+        v:!(Value.parse)
+        { Const v }
       | f:IDENT "(" args:parse_args ")"
         { Call (f, args) }
       | v:IDENT
