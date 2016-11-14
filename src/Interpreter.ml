@@ -10,14 +10,43 @@ module Value =
       | _ -> failwith "Not an int"
   end
 
-type io_state_t = {input: Value.t list; output: Value.t list}
-type expr_state_t = {io: io_state_t; vars: (string * Value.t) list}
+type expr_state_t = {vars: (string * Value.t) list}
 type stmt_state_t = {expr: expr_state_t; result: Value.t option}
-type invoke_t = string -> Value.t list -> io_state_t -> (Value.t * io_state_t)
+type invoke_t = string -> Value.t list -> Value.t
+
+module Builtins =
+  struct
+    type t = {
+      args: int;
+      invoke: Value.t list -> Value.t
+    }
+
+    let read: t = {
+      args = 0;
+      invoke = fun _ ->
+        let () = Printf.printf "> " in
+        Value.Int (read_int ())
+    }
+
+    let write: t = {
+      args = 1;
+      invoke = fun args ->
+        let () = Printf.printf "%s\n" @@ Value.print @@ List.hd args in
+        Value.Int 0
+    }
+
+    let builtins: (string * t) list = [
+      ("read" , read );
+      ("write", write)
+    ]
+
+    let get (func: string): t = List.assoc func builtins
+    let invoke (func: string): (Value.t list -> Value.t) =
+      (get func).invoke
+  end
 
 module Expr =
   struct
-    open Value
     include Language.Expr
 
     let eval_op (op: string) (l': Value.t) (r': Value.t): Value.t =
@@ -38,7 +67,7 @@ module Expr =
         | "==" -> toi (l =  r)
         | "!=" -> toi (l <> r)
         | _ -> failwith "wrong op"
-      in Int r
+      in Value.Int r
 
     let rec eval (state: expr_state_t) (invoke: invoke_t) (expr: t): (Value.t * expr_state_t) =
       let rec eval_args (args: t list) (state: expr_state_t): (Value.t list * expr_state_t) =
@@ -59,8 +88,8 @@ module Expr =
         (eval_op binop lr rr, state'')
       | Call (f, args)   ->
         let (args', state') = eval_args args state in
-        let (res, io'') = invoke f args' state'.io in
-        (res, {state' with io = io''})
+        let res = invoke f args' in
+        (res, state')
   end
 
 module Stmt =
@@ -78,15 +107,9 @@ module Stmt =
           let state'  = eval state  invoke l in
           let state'' = eval state' invoke r in
           state''
-        | Read   x              ->
-          let (y, input') = cut_head state.expr.io.input in
-          {state with expr = {vars = (x, y)::state.expr.vars; io = {state.expr.io with input = input'}}}
-        | Write  expr           ->
-          let (v, expr') = Expr.eval state.expr invoke expr in
-          {state with expr = {expr' with io = {expr'.io with output = expr'.io.output @ [v]}}}
         | Assign (x, expr)      ->
           let (v, expr') = Expr.eval state.expr invoke expr in
-          {state with expr = {expr' with vars = (x, v)::expr'.vars}}
+          {state with expr = {vars = (x, v)::expr'.vars}}
         | If     (cond, b1, b2) ->
           let (v, expr') = Expr.eval state.expr invoke cond in
           let state' = {state with expr = expr'} in
@@ -116,18 +139,20 @@ module Program =
     open Stmt
     include Language.Program
 
-    let eval (input: Value.t list) (program: t) =
-      let rec invoke': bool -> invoke_t = fun must_ret name args io ->
-        let func = List.assoc name program.funcs in
-        let state = {expr = {vars = List.map2 (fun a b -> (a, b)) func.args args; io = io}; result = None} in
-        let state' = Stmt.eval state (invoke' true) func.body in
-        let res = match state'.result with
-        | Some x                 -> x
-        | None when not must_ret -> Int 0
-        | _                      -> failwith "Function has not returned any value"
-        in
-        (res, state'.expr.io)
+    let eval (program: t) =
+      let rec invoke': bool -> invoke_t = fun must_ret name args ->
+        try
+          let func = List.assoc name program.funcs in
+          let state = {expr = {vars = List.map2 (fun a b -> (a, b)) func.args args}; result = None} in
+          let state' = Stmt.eval state (invoke' true) func.body in
+          let res = match state'.result with
+          | Some x                 -> x
+          | None when not must_ret -> Int 0
+          | _                      -> failwith "Function has not returned any value"
+          in res
+        with Not_found ->
+          Builtins.invoke name args
       in
-      let (_, io') = invoke' false "main" [] {input = input; output = []} in
-      io'.output
+      let _ = invoke' false "main" [] in
+      ()
   end

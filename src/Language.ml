@@ -63,8 +63,6 @@ module Stmt =
     type t =
     | Skip
     | Seq    of t * t
-    | Read   of string
-    | Write  of Expr.t
     | Assign of string * Expr.t
     | If     of Expr.t * t * t
     | While  of Expr.t * t
@@ -76,8 +74,6 @@ module Stmt =
       match stmt with
       | Skip             -> SS.empty
       | Seq (l, r)       -> SS.union (collect_vars l) (collect_vars r)
-      | Read x           -> SS.singleton x
-      | Write e          -> Expr.collect_vars e
       | Assign (x, e)    -> SS.union (SS.singleton x) (Expr.collect_vars e)
       | If (l, b1, b2)   -> SS.union (Expr.collect_vars l) @@ SS.union (collect_vars b1) (collect_vars b2)
       | While (l, r)     -> SS.union (Expr.collect_vars l) (collect_vars r)
@@ -92,10 +88,6 @@ module Stmt =
       stmt:
         %"skip"
         { Skip }
-      | %"read" "(" name:IDENT ")"
-        { Read name }
-      | %"write" "(" e:!(Expr.parse) ")"
-        { Write e }
       | x:IDENT ":=" e:!(Expr.parse)
         { Assign (x, e) }
       | %"if" cond1:!(Expr.parse) %"then" b1:parse suf:(%"elif" !(Expr.parse) %"then" parse)* last:(%"else" parse)? %"fi"

@@ -7,7 +7,7 @@ let parse (infile: string) =
     (object
        inherit Matcher.t s
        inherit Util.Lexers.ident [
-         "read"; "write"; "skip"; "if"; "else"; "elif"; "fi";
+         "skip"; "if"; "else"; "elif"; "fi";
          "while"; "do"; "od"; "repeat"; "until";
          "for"; "fun"; "return"
        ] s
@@ -35,26 +35,13 @@ let main = ()
     in
     match parse filename with
     | `Ok stmt ->
-      let rec read acc =
-        try
-          let r = read_int () in
-          Printf.printf "> ";
-          read (acc @ [Value.Int r])
-        with End_of_file -> acc
-      in
       (match mode with
        | `X86 ->
          X86.build (Filename.chop_suffix filename ".expr") stmt
        | `SM  ->
-         let input = read [] in
-         let output =
-           StackMachine.Interpreter.run input (StackMachine.Compile.program stmt)
-         in
-         List.iter (fun i -> Printf.printf "%s\n" @@ Value.print i) output
+         StackMachine.Interpreter.run (StackMachine.Compile.program stmt)
        | `Int ->
-         let input = read [] in
-         let output = Interpreter.Program.eval input stmt in
-         List.iter (fun i -> Printf.printf "%s\n" @@ Value.print i) output
+         Interpreter.Program.eval stmt
       )
     | `Fail er -> Printf.eprintf "%s\n" er
   with

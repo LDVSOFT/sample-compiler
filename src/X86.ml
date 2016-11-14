@@ -106,7 +106,7 @@ let x86compile (code: i list): x86instr list =
           X86Cmp (L 0, x86eax);
           X86Jne label
         ])
-      | S_CALL (func, argcnt) ->
+      | S_CALL (func, argcnt) | S_BUILT (func, argcnt) ->
         let (args, stack') = Utils.list_cut state.stack argcnt in
         let state' = {state with stack = stack'} in
         let args_on_stack = List.length @@ List.filter (function | S _ -> true | _ -> false) args in
@@ -141,21 +141,6 @@ let x86compile (code: i list): x86instr list =
           X86Pop x86ebp;
           X86Ret
         ])
-      | S_READ   ->
-        let (s, state') = allocate state in
-        (state', [
-          X86Call "read";
-          X86Mov (x86eax, s)] @
-          x86addStack s
-        )
-      | S_WRITE  ->
-        let (s, state') = free state in
-        (state', [
-          X86Push s;
-          X86Call "write"] @
-          x86subStackN 1 @
-          x86subStack s
-        )
       | S_PUSH (Int n) ->
         let (s, state') = allocate state in
         (state', [
