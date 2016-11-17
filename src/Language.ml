@@ -7,7 +7,7 @@ module Value =
   struct
     type t =
     | Int    of int
-    | String of string
+    | String of bytes
 
     let print x = match x with
     | Int n    -> string_of_int n
@@ -16,7 +16,7 @@ module Value =
     ostap (
       parse:
         l:DECIMAL {Int l}
-      | s:STRING  {String s}
+      | s:STRING  {String (String.sub s 1 (String.length s - 2)) }
     )
   end
 

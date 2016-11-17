@@ -8,6 +8,11 @@ module Value =
       match x with
       | Int v -> v
       | _ -> failwith "Not an int"
+
+    let tos (x: t): bytes =
+      match x with
+      | String v -> v
+      | _        -> failwith "Not a string"
   end
 
 type expr_state_t = {vars: (string * Value.t) list}
@@ -16,6 +21,8 @@ type invoke_t = string -> Value.t list -> Value.t
 
 module Builtins =
   struct
+    open Value
+
     type t = {
       args: int;
       invoke: Value.t list -> Value.t
@@ -23,21 +30,69 @@ module Builtins =
 
     let read: t = {
       args = 0;
-      invoke = fun _ ->
+      invoke = fun [] ->
         let () = Printf.printf "> " in
-        Value.Int (read_int ())
+        Int (read_int ())
     }
 
     let write: t = {
       args = 1;
-      invoke = fun args ->
-        let () = Printf.printf "%s\n" @@ Value.print @@ List.hd args in
-        Value.Int 0
+      invoke = fun [arg] ->
+        let () = Printf.printf "%s\n" @@ Value.print @@ arg in
+        Int 0
+    }
+
+    let strmake: t = {
+      args = 2;
+      invoke = fun [Value.Int n; Int c] -> String (Bytes.make n @@ Char.chr c)
+    }
+
+    let strset: t = {
+      args = 3;
+      invoke = fun [(String s) as r; Int i; Int c] -> Bytes.set s i @@ Char.chr c; r
+    }
+
+    let strget: t = {
+      args = 2;
+      invoke = fun [String s; Int i] -> Int (Char.code @@ Bytes.get s i)
+    }
+
+    let strdup: t = {
+      args = 1;
+      invoke = fun [String s] -> String (Bytes.copy s)
+    }
+
+    let strcat: t = {
+      args = 2;
+      invoke = fun [String s1; String s2] -> String (Bytes.concat Bytes.empty [s1; s2])
+    }
+
+    let strcmp: t = {
+      args = 2;
+      invoke = fun [String s1; String s2] -> Int (Bytes.compare s1 s2)
+    }
+
+    let strlen: t = {
+      args = 1;
+      invoke = fun [String s] -> Int (Bytes.length s)
+    }
+
+    let strsub: t = {
+      args = 3;
+      invoke = fun [String s; Int i; Int l] -> String (Bytes.sub s i l)
     }
 
     let builtins: (string * t) list = [
       ("read" , read );
-      ("write", write)
+      ("write", write);
+      ("strmake", strmake);
+      ("strset" , strset );
+      ("strget" , strget );
+      ("strdup" , strdup );
+      ("strcat" , strcat );
+      ("strcmp" , strcmp );
+      ("strlen" , strlen );
+      ("strsub" , strsub )
     ]
 
     let get (func: string): t = List.assoc func builtins
