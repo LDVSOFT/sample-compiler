@@ -16,6 +16,7 @@ module Value =
     ostap (
       parse:
         l:DECIMAL {Int l}
+      | c:CHAR    {Int (Char.code c)}
       | s:STRING  {String (String.sub s 1 (String.length s - 2)) }
     )
   end
