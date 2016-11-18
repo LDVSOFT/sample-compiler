@@ -1,5 +1,5 @@
-read(x);
-read(y);
+x := read();
+y := read();
 z := 1;
 for i := 1, i <= y, i := i + 1 do
   z := z * x

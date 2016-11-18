@@ -1,7 +1,3 @@
-open Language
-open Expr
-open Stmt
-open StackMachine
 open Utils
 
 let x86regs = [|"%esp"; "%ebp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
@@ -13,6 +9,7 @@ type opnd =
 | R of int    (* register*)
 | S of int    (* stack ( lower EBP ) *)
 | M of string (* mark *)
+| A of string (* address of a mark *)
 | L of int    (* const *)
 
 let x86esp = R (Utils.find x86regs "%esp")
@@ -43,6 +40,7 @@ type x86instr = (* src -> dest *)
 
 type state_t = {
   stack: opnd list;
+  strings: string list;
   vars: (string * opnd) list;
   locals: int
 }
@@ -59,7 +57,7 @@ let free state =
   let (x, stack') = cut_head state.stack in
   (x, {state with stack = stack'})
 
-let x86compile (code: i list): x86instr list =
+let x86compile (code: StackMachine.i list): (x86instr list * string list) =
   let x86addStackN n = [X86Sub (L (word_size * n), x86esp)] in
   let x86subStackN n = [X86Add (L (word_size * n), x86esp)] in
   let x86addStack s =
@@ -78,9 +76,9 @@ let x86compile (code: i list): x86instr list =
   | R x -> f t
   | _ -> [X86Mov (t, t')] @ (f t') @ [X86Mov (t', t)]
   in
-  let rec x86compile' (state: state_t) (code: i list) =
+  let rec x86compile' (state: state_t) (code: StackMachine.i list) =
     match code with
-    | []       -> []
+    | []       -> ([], state.strings)
     | i::code' ->
     let (state', x86code) =
       match i with
@@ -115,7 +113,7 @@ let x86compile (code: i list): x86instr list =
         (state'',
           List.map (fun o -> X86Push o) volatiles @
           List.map (fun o -> X86Push o) args @ [
-          X86Call func;
+          X86Call (match i with | S_CALL _ -> func | S_BUILT _ -> "builtin_" ^ func | _ -> failwith "wtf");
           X86Mov (x86eax, s)] @
           x86subStackN argcnt @
           List.map (fun o -> X86Pop o) (List.rev volatiles) @
@@ -126,7 +124,7 @@ let x86compile (code: i list): x86instr list =
         assert(state.stack = []);
         let local_loc = List.mapi (fun i a -> (a, S i)) local_var in
         let local_arg = List.mapi (fun i a -> (a, S (-3 - i))) args in
-        ({stack = []; vars = local_arg @ local_loc; locals = List.length local_var}, [
+        ({stack = []; vars = local_arg @ local_loc; locals = List.length local_var; strings = state.strings}, [
           X86Push x86ebp;
           X86Mov (x86esp, x86ebp)] @
           x86addStackN (List.length local_var)
@@ -145,6 +143,15 @@ let x86compile (code: i list): x86instr list =
         let (s, state') = allocate state in
         (state', [
           X86Mov (L n, s)] @
+          x86addStack s
+        )
+      | S_PUSH (String str) ->
+        let num = List.length state.strings in
+        let label = "string_" ^ (string_of_int num) in
+        let (s, state') = allocate state in
+        let state'' = {state' with strings = state'.strings @ [str]} in
+        (state'', [
+          X86Mov (A label, s)] @
           x86addStack s
         )
       | S_POP ->
@@ -230,9 +237,10 @@ let x86compile (code: i list): x86instr list =
         ) @ x86subStack y)
       )
    in
-   x86code @ x86compile' state' code'
+   let (instrs', strings') = x86compile' state' code' in
+   (x86code @ instrs', strings')
   in
-  x86compile' {stack = []; vars = []; locals = 0} code
+  x86compile' {stack = []; vars = []; locals = 0; strings = []} code
 
 let print_code code b =
   let rec pr_op opnd =
@@ -240,6 +248,7 @@ let print_code code b =
     | R n -> x86regs.(n)
     | S o -> Printf.sprintf "%d(%s)" ((-4) * (o + 1)) (pr_op x86ebp)
     | M s -> s
+    | A s -> Printf.sprintf "$%s" s
     | L n -> Printf.sprintf "$%d" n
   in
   let rec pr_op8 opnd =
@@ -247,6 +256,7 @@ let print_code code b =
     | R n -> x86regs8.(n)
     | S o -> Printf.sprintf "%d(%s)" ((-4) * (o + 1)) (pr_op x86ebp)
     | M s -> s
+    | A s -> Printf.sprintf "$%s" s
     | L n -> Printf.sprintf "$%d" n
   in
 
@@ -273,14 +283,17 @@ let print_code code b =
     | X86_Comm  s -> Printf.bprintf b "\t#%s\n" s
   ) code
 
-let print_compiled (p: Program.t): string =
+let print_compiled (p: Language.Program.t): string =
   let buffer = Buffer.create 1024 in
-  let asm = x86compile (StackMachine.Compile.program p) in
-  Buffer.add_string buffer "\t.extern read\n\t.extern write\n\t.global main\n\n\t.text\n";
+  let (asm, strings) = x86compile (StackMachine.Compile.program p) in
+  List.iter (fun name -> Printf.bprintf buffer "\t.extern %s\n" name) Interpreter.Builtins.names;
+  Buffer.add_string buffer "\t.global main\n\n\t.text\n";
   print_code asm buffer;
+  Buffer.add_string buffer "\t.data\n";
+  List.iteri (fun i str -> Printf.bprintf buffer "string_%d:\n\t.int %d\n\t.ascii \"%s\"\n" i (Bytes.length str) str) strings;
   Buffer.contents buffer
 
-let build (file: string) (p: Program.t): unit =
+let build (file: string) (p: Language.Program.t): unit =
   let outf = open_out (Printf.sprintf "%s.s" file) in
   let runtime_dir = try
     Sys.getenv "RC_RUNTIME"

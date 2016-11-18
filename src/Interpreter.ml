@@ -37,14 +37,14 @@ module Builtins =
 
     let write: t = {
       args = 1;
-      invoke = fun [arg] ->
-        let () = Printf.printf "%s\n" @@ Value.print @@ arg in
+      invoke = fun [Int n] ->
+        let () = Printf.printf "%d\n" n in
         Int 0
     }
 
     let strmake: t = {
       args = 2;
-      invoke = fun [Value.Int n; Int c] -> String (Bytes.make n @@ Char.chr c)
+      invoke = fun [Int n; Int c] -> String (Bytes.make n @@ Char.chr c)
     }
 
     let strset: t = {
@@ -98,6 +98,7 @@ module Builtins =
     let get (func: string): t = List.assoc func builtins
     let invoke (func: string): (Value.t list -> Value.t) =
       (get func).invoke
+    let names = List.map (fun (name, _) -> name) builtins
   end
 
 module Expr =

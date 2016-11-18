@@ -43,6 +43,6 @@ let main = ()
        | `Int ->
          Interpreter.Program.eval stmt
       )
-    | `Fail er -> Printf.eprintf "%s\n" er
+    | `Fail er -> failwith er
   with
   | Invalid_argument _ -> Printf.printf "Usage: rc.byte <name.expr>"
