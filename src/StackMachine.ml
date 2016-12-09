@@ -192,8 +192,8 @@ module Interpreter =
           | S_JIF label ->
             let (y, stack') = cut_head state.stack in
             let where = find code @@ S_LABEL label in
-            run' @@ if Value.toi y == 0 then next_state
-            else {state with frame = {state.frame with ip = where}}
+            run' @@ if Value.toi y == 0 then {next_state with stack = stack'}
+            else {state with frame = {state.frame with ip = where}; stack = stack'}
           | S_CALL (func, _) ->
             let where = find code @@ S_LABEL func in
             run' {state with callstack = state.frame::state.callstack; frame = {vars = []; ip = where}}
