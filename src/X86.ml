@@ -290,7 +290,7 @@ let print_compiled (p: Language.Program.t): string =
   Buffer.add_string buffer "\t.global main\n\n\t.text\n";
   print_code asm buffer;
   Buffer.add_string buffer "\t.data\n";
-  List.iteri (fun i str -> Printf.bprintf buffer "string_%d:\n\t.int %d\n\t.ascii \"%s\"\n" i (Bytes.length str) str) strings;
+  List.iteri (fun i str -> Printf.bprintf buffer "string_%d:\n\t.int 0\n\t.int %d\n\t.ascii \"%s\"\n" i (Bytes.length str) str) strings;
   Buffer.contents buffer
 
 let build (file: string) (p: Language.Program.t): unit =
