@@ -119,7 +119,7 @@ module Stmt =
 
     ostap (
       parse:
-        l:stmt suf:(-";" r:stmt)* { List.fold_left (fun l r -> Seq (l, r)) l suf };
+        s:stmt? ss:(-";" parse)? { Seq (Utils.default Skip s, Utils.default Skip ss) };
 
       stmt:
         %"skip"
