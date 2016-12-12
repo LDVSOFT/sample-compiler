@@ -82,6 +82,28 @@ module Builtins =
       invoke = fun [String s; Int i; Int l] -> String (Bytes.sub s i l)
     }
 
+    let arrmake: t = {
+      args = 2;
+      invoke = fun [Int n; v] -> Array (Array.make n v)
+    }
+
+    let arrset: t = {
+      args = 3;
+      invoke = fun [Array a; Int n; v] ->
+        Array.set a n v;
+        Array a
+    }
+
+    let arrget: t = {
+      args = 2;
+      invoke = fun [Array a; Int n] -> Array.get a n
+    }
+
+    let arrlen: t = {
+      args = 1;
+      invoke = fun [Array a] -> Int (Array.length a)
+    }
+
     let builtins: (string * t) list = [
       ("read" , read );
       ("write", write);
@@ -92,7 +114,13 @@ module Builtins =
       ("strcat" , strcat );
       ("strcmp" , strcmp );
       ("strlen" , strlen );
-      ("strsub" , strsub )
+      ("strsub" , strsub );
+      ("arrmake", arrmake);
+      ("Arrmake", arrmake);
+      ("arrlen" , arrlen );
+
+      ("__arrget", arrget);
+      ("__arrset", arrset);
     ]
 
     let get (func: string): t = List.assoc func builtins
@@ -196,6 +224,7 @@ module Program =
     include Language.Program
 
     let eval (program: t) =
+      (*print program;*)
       let rec invoke': bool -> invoke_t = fun must_ret name args ->
         try
           let func = List.assoc name program.funcs in

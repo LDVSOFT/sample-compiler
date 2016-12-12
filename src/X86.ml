@@ -40,7 +40,8 @@ type x86instr = (* src -> dest *)
 
 type state_t = {
   stack: opnd list;
-  strings: string list;
+  append: Buffer.t;
+  append_size: int;
   vars: (string * opnd) list;
   locals: int
 }
@@ -57,7 +58,7 @@ let free state =
   let (x, stack') = cut_head state.stack in
   (x, {state with stack = stack'})
 
-let x86compile (code: StackMachine.i list): (x86instr list * string list) =
+let x86compile (code: StackMachine.i list): (x86instr list * Buffer.t) =
   let x86addStackN n = [X86Sub (L (word_size * n), x86esp)] in
   let x86subStackN n = [X86Add (L (word_size * n), x86esp)] in
   let x86addStack s =
@@ -78,7 +79,7 @@ let x86compile (code: StackMachine.i list): (x86instr list * string list) =
   in
   let rec x86compile' (state: state_t) (code: StackMachine.i list) =
     match code with
-    | []       -> ([], state.strings)
+    | []       -> ([], state.append)
     | i::code' ->
     let (state', x86code) =
       match i with
@@ -124,7 +125,7 @@ let x86compile (code: StackMachine.i list): (x86instr list * string list) =
         assert(state.stack = []);
         let local_loc = List.mapi (fun i a -> (a, S i)) local_var in
         let local_arg = List.mapi (fun i a -> (a, S (-3 - i))) args in
-        ({stack = []; vars = local_arg @ local_loc; locals = List.length local_var; strings = state.strings}, [
+        ({state with stack = []; vars = local_arg @ local_loc; locals = List.length local_var}, [
           X86Push x86ebp;
           X86Mov (x86esp, x86ebp)] @
           x86addStackN (List.length local_var)
@@ -139,19 +140,43 @@ let x86compile (code: StackMachine.i list): (x86instr list * string list) =
           X86Pop x86ebp;
           X86Ret
         ])
-      | S_PUSH (Int n) ->
-        let (s, state') = allocate state in
-        (state', [
-          X86Mov (L n, s)] @
-          x86addStack s
-        )
-      | S_PUSH (String str) ->
-        let num = List.length state.strings in
-        let label = "string_" ^ (string_of_int num) in
-        let (s, state') = allocate state in
-        let state'' = {state' with strings = state'.strings @ [str]} in
+      | S_PUSH v ->
+        let rec prepare_v (v: Language.Value.t) (state: state_t): (opnd * state_t) = (
+          match v with
+          | Int n -> (L n, state)
+          | String s ->
+            let i = state.append_size in
+            let name: string = "string_" ^ (string_of_int i) in
+            Printf.bprintf state.append "%s:\n\t.int 0\n\t.int %d\n\t.ascii \"%s\"\n" name (String.length s) s;
+            (A name, {state with append_size = i + 1})
+          | Array a ->
+            let i = state.append_size in
+            let name = "array_" ^ (string_of_int i) in
+            let b = Buffer.create 1024 in
+            let t = (match a with
+              | [||]  -> 1
+              | _ -> match a.(0) with
+                | Int _ -> 1
+                | _ -> 2
+            ) in
+            let () = Printf.bprintf b "%s:\n\t.int %d\n\t.int %d\n" name t (Array.length a) in
+            let take_one (elem: Language.Value.t) (state: state_t): (unit * state_t) =
+              let (v, state') = prepare_v elem state in
+              let () = match v with
+              | L n -> Printf.bprintf b "\t.int %d\n" n
+              | A s -> Printf.bprintf b "\t.int %s\n" s
+              in
+              ((), state')
+            in
+            let a': Language.Value.t list = Array.to_list a in
+            let (_, state') = Utils.m_map take_one a' {state with append_size = i + 1} in
+            Printf.bprintf state'.append "%s" (Buffer.contents b);
+            (A name, state')
+        ) in
+        let (op, state') = prepare_v v state in
+        let (s, state'') = allocate state' in
         (state'', [
-          X86Mov (A label, s)] @
+          X86Mov (op, s)] @
           x86addStack s
         )
       | S_POP ->
@@ -195,6 +220,7 @@ let x86compile (code: StackMachine.i list): (x86instr list * string list) =
         in
         let (y, state1) = free state  in
         let (x, state2) = free state1 in
+
         let (x, state1) = allocate state2 in (*sanity check*)
         (state1, (
           match op with
@@ -237,10 +263,10 @@ let x86compile (code: StackMachine.i list): (x86instr list * string list) =
         ) @ x86subStack y)
       )
    in
-   let (instrs', strings') = x86compile' state' code' in
-   (x86code @ instrs', strings')
+   let (instrs', append) = x86compile' state' code' in
+   (x86code @ instrs', append)
   in
-  x86compile' {stack = []; vars = []; locals = 0; strings = []} code
+  x86compile' {stack = []; vars = []; locals = 0; append = Buffer.create 1024; append_size = 0} code
 
 let print_code code b =
   let rec pr_op opnd =
@@ -285,12 +311,12 @@ let print_code code b =
 
 let print_compiled (p: Language.Program.t): string =
   let buffer = Buffer.create 1024 in
-  let (asm, strings) = x86compile (StackMachine.Compile.program p) in
+  let (asm, append) = x86compile (StackMachine.Compile.program p) in
   List.iter (fun name -> Printf.bprintf buffer "\t.extern %s\n" name) Interpreter.Builtins.names;
   Buffer.add_string buffer "\t.global main\n\n\t.text\n";
   print_code asm buffer;
   Buffer.add_string buffer "\t.data\n";
-  List.iteri (fun i str -> Printf.bprintf buffer "string_%d:\n\t.int 0\n\t.int %d\n\t.ascii \"%s\"\n" i (Bytes.length str) str) strings;
+  Buffer.add_buffer buffer append;
   Buffer.contents buffer
 
 let build (file: string) (p: Language.Program.t): unit =

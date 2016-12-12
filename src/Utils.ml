@@ -11,15 +11,14 @@ let default: 'a -> 'a option -> 'a = fun d v ->
   | Some x -> x
   | None   -> d
 
-let collect_args: ('a * 'a list) option -> 'a list = fun x ->
-  match x with
-  | None              -> []
-  | Some (head, tail) -> head::tail
-
 let cut_head (l: 'a list): ('a * 'a list) =
   match l with
   | x::xs -> (x, xs)
   | _ -> failwith "List depleted"
+
+let cut_tail (l: 'a list): ('a * 'a list) =
+  let (x, xs) = cut_head (List.rev l) in
+  (x, List.rev xs)
 
 let list_cut (l: 'a list) (n: int): ('a list * 'a list) =
   let rec f src dst n =
@@ -29,3 +28,11 @@ let list_cut (l: 'a list) (n: int): ('a list * 'a list) =
       let (x, xs) = cut_head src in
       f xs (dst @ [x]) (n - 1)
   in f l [] n
+
+let rec m_map (f: 'a -> 'c -> ('b * 'c)) (l: 'a list) (init: 'c): ('b list * 'c) =
+  match l with
+  | [] -> ([], init)
+  | x::xs ->
+    let (y, init') = f x init in
+    let (ys, init'') = m_map f xs init' in
+    (y::ys, init'')

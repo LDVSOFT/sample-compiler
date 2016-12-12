@@ -8,16 +8,31 @@ module Value =
     type t =
     | Int    of int
     | String of bytes
+    | Array  of t array
 
-    let print x = match x with
+    let rec print x = match x with
     | Int n    -> string_of_int n
     | String s -> Printf.sprintf "\"%s\"" s
+    | Array a ->
+      let b = Buffer.create 1024 in
+      Printf.bprintf b "[";
+      Printf.bprintf b "%s" @@ String.concat ", " @@ List.map print @@ Array.to_list a;
+      Printf.bprintf b "]";
+      Buffer.contents b
 
     ostap (
       parse:
+        unboxed
+      | boxed;
+
+      unboxed:
         l:DECIMAL {Int l}
-      | c:CHAR    {Int (Char.code c)}
-      | s:STRING  {String (String.sub s 1 (String.length s - 2)) }
+      | c:CHAR    {Int (Char.code c)};
+
+      boxed:
+        s:STRING                      {String (String.sub s 1 (String.length s - 2)) }
+    | "[" s:!(Util.list0 unboxed) "]" {Array (Array.of_list s)}
+    | "{" s:!(Util.list0 boxed)   "}" {Array (Array.of_list s)}
     )
   end
 
@@ -28,6 +43,17 @@ module Expr =
     | Var   of string
     | Op    of string * t * t
     | Call  of string * t list
+
+    let rec print x = match x with
+    | Const v -> Printf.sprintf "Const %s" @@ Value.print v
+    | Var s -> Printf.sprintf "Var %s" s
+    | Op (op, l, r) -> Printf.sprintf "(%s) %s (%s)" (print l) op (print r)
+    | Call (f, args) ->
+      let b = Buffer.create 32 in
+      Printf.bprintf b "%s(" f;
+      Printf.bprintf b "%s" @@ String.concat ", " @@ List.map print args;
+      Printf.bprintf b ")";
+      Buffer.contents b
 
     let rec collect_vars expr =
       match expr with
@@ -46,16 +72,17 @@ module Expr =
       mul    : l:pri     suf:(("*"|"/"|"%")                 pri    )* { List.fold_left (fun l (op, r) -> Op (Token.repr op, l, r)) l suf };
 
       pri:
+        f:basic coords:(-"[" parse -"]")*
+        { List.fold_left (fun l r -> Call ("__arrget", [l; r])) f coords };
+
+      basic:
         v:!(Value.parse)
         { Const v }
-      | f:IDENT "(" args:parse_args ")"
+      | f:IDENT "(" args:!(Util.list0 parse) ")"
         { Call (f, args) }
       | v:IDENT
         {Var v}
-      | -"(" parse -")";
-
-      parse_args: args:(parse (-"," parse)*)?
-        { collect_args args }
+      | -"(" parse -")"
     )
   end
 
@@ -70,6 +97,14 @@ module Stmt =
     | Repeat of Expr.t * t
     | Proc   of string * Expr.t list
     | Return of Expr.t
+
+    let rec print x = match x with
+    | Skip -> "skip"
+    | Seq (l, r) -> (print l) ^ ";\n" ^ (print r)
+    | Assign (s, e) -> Printf.sprintf "%s := %s" s (Expr.print e)
+    | While (e, s) -> Printf.sprintf "while %s do\n%s\nod" (Expr.print e) (print s)
+    | Proc (f, args) -> Expr.print @@ Expr.Call (f, args)
+    | Return e -> Printf.sprintf "return %s" @@ Expr.print e
 
     let rec collect_vars stmt =
       match stmt with
@@ -89,10 +124,16 @@ module Stmt =
       stmt:
         %"skip"
         { Skip }
+      | f:IDENT coords:(-"[" !(Expr.parse) -"]")+ ":=" e:!(Expr.parse)
+        {
+          let (coord, coords') = cut_tail coords in
+          let f' = List.fold_left (fun l r -> Expr.Call ("__arrget", [l; r])) (Expr.Var f) coords' in
+          Proc ("__arrset", [f'; coord; e])
+        }
       | x:IDENT ":=" e:!(Expr.parse)
         { Assign (x, e) }
       | %"if" cond1:!(Expr.parse) %"then" b1:parse suf:(%"elif" !(Expr.parse) %"then" parse)* last:(%"else" parse)? %"fi"
-        { List.fold_right (fun (c, b) e -> If (c, b, e)) ((cond1, b1)::suf) (default (Skip) last) }
+        { List.fold_right (fun (c, b) e -> If (c, b, e)) ((cond1, b1)::suf) (default Skip last) }
       | %"while" cond:!(Expr.parse) %"do" body:parse %"od"
         { While (cond, body) }
       | %"repeat" body:parse %"until" cond:!(Expr.parse)
@@ -101,7 +142,7 @@ module Stmt =
         { Seq (init, While (cond, Seq (body, step))) }
       | %"return" expr:!(Expr.parse)
         { Return expr }
-      | f:IDENT "(" args:!(Expr.parse_args) ")"
+      | f:IDENT "(" args:!(Util.list0 Expr.parse) ")"
         { Proc (f, args) }
     )
   end
@@ -111,11 +152,22 @@ module Program =
     type func = {args: string list; body: Stmt.t}
     type t = {funcs: (string * func) list}
 
+    let print p =
+      let print_f (n, f) =
+        Printf.eprintf "fun %s(" n;
+        Printf.eprintf "%s" @@ String.concat ", " f.args;
+        Printf.eprintf ")\nbegin\n";
+        Printf.eprintf "%s\n" @@ Stmt.print f.body;
+        Printf.eprintf "end\n\n"
+      in
+      List.iter print_f p.funcs
+
     ostap (
       parse: f:funcdef* m:!(Stmt.parse)
         { {funcs = ("main", {args = []; body = m})::f} };
 
-      funcdef: %"fun" f:IDENT "(" args:(IDENT (-"," IDENT)*)? ")" "begin" b:!(Stmt.parse) "end"
-        { (f, {args = collect_args args; body = b}) }
+      arg: IDENT;
+      funcdef: %"fun" f:IDENT "(" args:!(Util.list0 arg) ")" "begin" b:!(Stmt.parse) "end"
+        { (f, {args = args; body = b}) }
     )
   end

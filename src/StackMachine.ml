@@ -16,6 +16,22 @@ type i =
 | S_RET
 | S_COMM  of string
 
+let print (inst: i): unit =
+  match inst with
+  | S_LABEL s -> Printf.eprintf "LABEL: %s\n" s
+  | S_ENTER (a, b) -> Printf.eprintf "%s" ("ENTER: (" ^ (String.concat "," a) ^ ") (" ^ (String.concat "," b) ^ ")\n")
+  | S_PUSH v -> Printf.eprintf "PUSH: %s\n" @@ Language.Value.print v
+  | S_POP -> Printf.eprintf "POP\n"
+  | S_LD s -> Printf.eprintf "LD: %s\n" s
+  | S_ST s -> Printf.eprintf "ST: %s\n" s
+  | S_OP s -> Printf.eprintf "OP: %s\n" s
+  | S_JMP s -> Printf.eprintf "JMP: %s\n" s
+  | S_JIF s -> Printf.eprintf "JIF: %s\n" s
+  | S_CALL (s, n) -> Printf.eprintf "CALL: %s %d\n" s n
+  | S_BUILT (s, n) -> Printf.eprintf "BUILT: %s %d\n" s n
+  | S_RET -> Printf.eprintf "RET\n"
+  | S_COMM s -> Printf.eprintf "COMM: %s\n" s
+
 module Compile =
   struct
     open Language
@@ -162,9 +178,20 @@ module Interpreter =
       callstack: frame_t list
     }
 
+    let print_st (s:state_t):unit=
+      let prefix = String.make (List.length s.callstack) '\t' in
+      Printf.eprintf "%sip=%d depth=%d:\n" prefix s.frame.ip (List.length s.callstack);
+      Printf.eprintf "%s\tvars:" prefix;
+      List.iter (fun (s, v) -> Printf.eprintf " %s->%s" s (Value.print v)) s.frame.vars;
+      Printf.eprintf "\n%s\tstack:" prefix;
+      List.iter (fun v -> Printf.eprintf " %s" (Value.print v)) s.stack;
+      Printf.eprintf "\n"
+
     let run (code': i list): unit =
+      (*List.iter print code';*)
       let code = Array.of_list code' in
       let rec run' (state: state_t): state_t =
+        (*print_st state;*)
         if state.frame.ip >= Array.length code
         then failwith "Out of stack program"
         else (
