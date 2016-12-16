@@ -93,8 +93,8 @@ module Compile =
               S_ST x
             ], i)
           | If (cond, c1, c2)  ->
-            let label_true  = name ^ "_if_" ^ string_of_int i ^ "_true"  in
-            let label_end   = name ^ "_if_" ^ string_of_int i ^ "_end"   in
+            let label_true  = name ^ ".if." ^ string_of_int i ^ ".true"  in
+            let label_end   = name ^ ".if." ^ string_of_int i ^ ".end"   in
             let (b1, i' ) = stmt' c1 (i + 1) in
             let (b2, i'') = stmt' c2 i' in
             ([
@@ -111,8 +111,8 @@ module Compile =
               S_COMM "EndIf"
             ], i'')
           | While (cond, code) ->
-            let label_begin = name ^ "_while_" ^ string_of_int i ^ "_begin" in
-            let label_end   = name ^ "_while_" ^ string_of_int i ^ "_end" in
+            let label_begin = name ^ ".while." ^ string_of_int i ^ ".begin" in
+            let label_end   = name ^ ".while." ^ string_of_int i ^ ".end" in
             let (body, i') = stmt' code (i + 1) in
             ([
               S_LABEL label_begin;
@@ -126,7 +126,7 @@ module Compile =
               S_COMM "EndWhile"
             ], i')
           | Repeat (cond, code) ->
-            let label_begin = name ^ "_repeat_" ^ string_of_int i ^ "_begin" in
+            let label_begin = name ^ ".repeat." ^ string_of_int i ^ ".begin" in
             let (body, i') = stmt' code (i + 1) in
             ([
               S_LABEL label_begin;
