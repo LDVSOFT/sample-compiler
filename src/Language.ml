@@ -149,25 +149,24 @@ module Stmt =
 
 module Program =
   struct
-    type func = {args: string list; body: Stmt.t}
-    type t = {funcs: (string * func) list}
+    type t = {funcs: (string * t) list; args: string list; body: Stmt.t }
 
-    let print p =
-      let print_f (n, f) =
-        Printf.eprintf "fun %s(" n;
-        Printf.eprintf "%s" @@ String.concat ", " f.args;
-        Printf.eprintf ")\nbegin\n";
-        Printf.eprintf "%s\n" @@ Stmt.print f.body;
-        Printf.eprintf "end\n\n"
-      in
-      List.iter print_f p.funcs
+    let rec print name f =
+      let b = Buffer.create 1024 in
+      Printf.bprintf b "fun %s(" name;
+      Printf.bprintf b "%s" @@ String.concat ", " f.args;
+      Printf.bprintf b ")\nbegin\n";
+      Printf.bprintf b "%s" @@ String.concat "" @@ List.map (fun (n, f) -> print n f) f.funcs;
+      Printf.bprintf b "%s\n" @@ Stmt.print f.body;
+      Printf.bprintf b "end\n";
+      Buffer.contents b
 
     ostap (
-      parse: f:funcdef* m:!(Stmt.parse)
-        { {funcs = ("main", {args = []; body = m})::f} };
+      parse: fs:funcdef* b:!(Stmt.parse)
+        { { funcs = fs; args = []; body = b } };
 
       arg: IDENT;
-      funcdef: %"fun" f:IDENT "(" args:!(Util.list0 arg) ")" "begin" b:!(Stmt.parse) "end"
-        { (f, {args = args; body = b}) }
+      funcdef: %"fun" f:IDENT "(" args:!(Util.list0 arg) ")" "begin" b:parse "end"
+        { (f, {funcs = b.funcs; args = args; body = b.body}) }
     )
   end

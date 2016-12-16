@@ -15,9 +15,9 @@ module Value =
       | _        -> failwith "Not a string"
   end
 
-type expr_state_t = {vars: (string * Value.t) list}
+type expr_state_t = {funcs: (string * Language.Program.t) list; vars: (string * Value.t) list}
 type stmt_state_t = {expr: expr_state_t; result: Value.t option}
-type invoke_t = string -> Value.t list -> Value.t
+type invoke_t = (string * Language.Program.t) list -> string -> Value.t list -> Value.t
 
 module Builtins =
   struct
@@ -172,7 +172,7 @@ module Expr =
         (eval_op binop lr rr, state'')
       | Call (f, args)   ->
         let (args', state') = eval_args args state in
-        let res = invoke f args' in
+        let res = invoke state'.funcs f args' in
         (res, state')
   end
 
@@ -193,7 +193,7 @@ module Stmt =
           state''
         | Assign (x, expr)      ->
           let (v, expr') = Expr.eval state.expr invoke expr in
-          {state with expr = {vars = (x, v)::expr'.vars}}
+          {state with expr = {state.expr with vars = (x, v)::expr'.vars}}
         | If     (cond, b1, b2) ->
           let (v, expr') = Expr.eval state.expr invoke cond in
           let state' = {state with expr = expr'} in
@@ -224,11 +224,11 @@ module Program =
     include Language.Program
 
     let eval (program: t) =
-      (*print program;*)
-      let rec invoke': bool -> invoke_t = fun must_ret name args ->
+      (*Printf.eprintf "%s" @@ print "main" program;*)
+      let rec invoke': bool -> invoke_t = fun must_ret funcs name args ->
         try
-          let func = List.assoc name program.funcs in
-          let state = {expr = {vars = List.map2 (fun a b -> (a, b)) func.args args}; result = None} in
+          let func = List.assoc name funcs in
+          let state = {expr = {funcs = func.funcs @ funcs; vars = List.map2 (fun a b -> (a, b)) func.args args}; result = None} in
           let state' = Stmt.eval state (invoke' true) func.body in
           let res = match state'.result with
           | Some x                 -> x
@@ -236,8 +236,9 @@ module Program =
           | _                      -> failwith "Function has not returned any value"
           in res
         with Not_found ->
+          (*Printf.eprintf "Looking for builtin %s...\n" name;*)
           Builtins.invoke name args
       in
-      let _ = invoke' false "main" [] in
+      let _ = invoke' false ["main", program] "main" [] in
       ()
   end

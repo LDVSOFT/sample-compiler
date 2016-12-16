@@ -41,8 +41,10 @@ module Compile =
     open Program
     open Interpreter
 
+    type context_t = (string * (string * Program.t)) list
+
     let program (p: Language.Program.t): i list =
-      let rec expr (e: Language.Expr.t): i list = match e with
+      let rec expr (e: Language.Expr.t) (funcs: context_t): i list = match e with
       | Var x         ->
         [
           S_COMM x;
@@ -54,31 +56,31 @@ module Compile =
           S_PUSH n
         ]
       | Op (op, l, r) ->
-        expr l @
-        expr r @
+        expr l funcs @
+        expr r funcs @
         [
           S_COMM op;
           S_OP op
         ]
       | Call (f, ps)  ->
         try
-          let func = List.assoc f p.funcs in
+          let (f', func) = List.assoc f funcs in
           ([
             S_COMM (Printf.sprintf "Call %s..." f) ] @
-            (List.concat @@ List.map expr ps) @ [
-            S_COMM (Printf.sprintf "Call %s" f);
-            S_CALL (f, List.length func.args)
+            (List.concat @@ List.map (fun p -> expr p funcs) ps) @ [
+            S_COMM (Printf.sprintf "Call %s=%s" f f');
+            S_CALL (f', List.length func.args)
           ])
         with Not_found ->
           let builtin: Interpreter.Builtins.t = Interpreter.Builtins.get f in
           ([
             S_COMM (Printf.sprintf "Call builtin %s..." f)] @
-            (List.concat @@ List.map expr ps) @ [
+            (List.concat @@ List.map (fun p -> expr p funcs) ps) @ [
             S_COMM (Printf.sprintf "Call builtin %s" f);
             S_BUILT (f, builtin.args)
           ])
       in
-      let stmt (name: string) (s: Language.Stmt.t): i list =
+      let stmt (name: string) (s: Language.Stmt.t) (funcs: context_t): i list =
         let rec stmt' s i = match s with
           | Skip               -> ([
               S_COMM "Skip"
@@ -89,17 +91,17 @@ module Compile =
             (res' @ res'', i'')
           | Assign (x, e)      -> ([
               S_COMM (Printf.sprintf "Assign %s..." x)] @
-              expr e @ [
+              expr e funcs @ [
               S_ST x
             ], i)
           | If (cond, c1, c2)  ->
-            let label_true  = name ^ ".if." ^ string_of_int i ^ ".true"  in
-            let label_end   = name ^ ".if." ^ string_of_int i ^ ".end"   in
+            let label_true  = name ^ ".if." ^ string_of_int i ^ ".true" in
+            let label_end   = name ^ ".if." ^ string_of_int i ^ ".end"  in
             let (b1, i' ) = stmt' c1 (i + 1) in
             let (b2, i'') = stmt' c2 i' in
             ([
               S_COMM "If..."] @
-              expr cond @ [
+              expr cond funcs @ [
               S_JIF label_true;
               S_COMM "Else..."] @
               b2 @ [
@@ -112,12 +114,12 @@ module Compile =
             ], i'')
           | While (cond, code) ->
             let label_begin = name ^ ".while." ^ string_of_int i ^ ".begin" in
-            let label_end   = name ^ ".while." ^ string_of_int i ^ ".end" in
+            let label_end   = name ^ ".while." ^ string_of_int i ^ ".end"   in
             let (body, i') = stmt' code (i + 1) in
             ([
               S_LABEL label_begin;
               S_COMM "While..."] @
-              expr (Op ("==", cond, Const (Int 0))) @ [
+              expr (Op ("==", cond, Const (Int 0))) funcs @ [
               S_JIF label_end;
               S_COMM "Do..."] @
               body @ [
@@ -133,34 +135,40 @@ module Compile =
               S_COMM "Repeat..."] @
               body @ [
               S_COMM "Until..."] @
-              expr (Op ("==", cond, Const (Int 0))) @ [
+              expr (Op ("==", cond, Const (Int 0))) funcs @ [
               S_JIF label_begin;
               S_COMM "EndRepeat"
             ], i')
           | Proc (f, ps)        ->
             (
-              expr (Call (f, ps)) @ [
+              expr (Call (f, ps)) funcs @ [
               S_POP
             ], i)
           | Return e            ->
             (
-              expr e @ [
+              expr e funcs @ [
               S_RET
             ], i)
         in
         let (res, _) = stmt' s 0 in
         res
       in
-      let func (name: string) (f: Language.Program.func): i list =
-        let all_var = Language.Stmt.collect_vars f.body in
-        let local_var = SS.diff all_var (SS.of_list f.args)
-        in [
-          S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
-          S_LABEL name;
-          S_ENTER (f.args, SS.elements local_var)] @
-          stmt name @@ Seq (f.body, Return (Const (Int 0)))
+      let rec func (name: string) (f: Program.t) (funcs: context_t) : i list =
+        let subname name' = name ^ "." ^ name' in
+        let funcs': context_t = (List.map (fun (n, f) -> (n, (subname n, f))) f.funcs) @ funcs in
+        let func_body: i list =
+          let all_var = Language.Stmt.collect_vars f.body in
+          let local_var = SS.diff all_var (SS.of_list f.args)
+          in [
+            S_COMM (Printf.sprintf "Function %s(%s)..." name @@ String.concat "," f.args);
+            S_LABEL name;
+            S_ENTER (f.args, SS.elements local_var)] @
+            stmt name (Seq (f.body, Return (Const (Int 0)))) funcs'
+        in
+        let fs: i list = List.concat @@ List.map (fun (name', f') -> func (subname name') f' funcs') f.funcs in
+        fs @ func_body
       in
-      List.concat @@ List.map (fun (name, f) -> func name f) p.funcs
+      func "main" p []
   end
 
 module Interpreter =

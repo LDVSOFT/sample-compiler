@@ -1,0 +1,29 @@
+fun a(n) begin
+	fun b(n) begin
+		fun a(n) begin
+			write(c(n));
+			return d(n);
+		end
+		return a(n);
+	end
+
+	fun d(n) begin
+		return 3 * n;
+	end
+
+	write(b(n));
+	return 1 * n;
+end
+
+fun c(n) begin
+	fun d(n) begin
+		return 2 * n;
+	end;
+	return d(n);
+end
+
+fun d(n) begin
+	return 0
+end
+
+write(a(10));
